@@ -5,11 +5,12 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Blog Archive - My Octopress Blog</title>
-  <meta name="author" content="Your Name">
+  <title>Blog Archive - Knapsy&#8217;s brain dump</title>
+  <meta name="author" content="Knapsy">
 
   
-  <meta name="description" content=" Blog Archive Recent Posts ">
+  <meta name="description" content="Blog Archive 2014 First Post
+Oct 02 2014 posted in various About Me Knapsy (@TheKnapsy) Personal blog aiming to cover aspects of IT security, code &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -21,7 +22,7 @@
   <link rel="canonical" href="http://knapsy.github.io/blog/archives">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
-  <link href="/atom.xml" rel="alternate" title="My Octopress Blog" type="application/atom+xml">
+  <link href="/atom.xml" rel="alternate" title="Knapsy's brain dump" type="application/atom+xml">
   <script src="/javascripts/modernizr-2.0.js"></script>
   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
   <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
@@ -36,9 +37,9 @@
 
 <body   >
   <header role="banner"><hgroup>
-  <h1><a href="/">My Octopress Blog</a></h1>
+  <h1><a href="/">Knapsy&#8217;s brain dump</a></h1>
   
-    <h2>A blogging framework for hackers.</h2>
+    <h2>IT security and other /dev/random stuff.</h2>
   
 </hgroup>
 
@@ -73,6 +74,23 @@
   
   <div id="blog-archives">
 
+
+
+  
+  <h2>2014</h2>
+
+<article>
+  
+<h1><a href="/blog/2014/10/02/first-post/">First Post</a></h1>
+<time datetime="2014-10-02T23:09:00+10:00" pubdate><span class='month'>Oct</span> <span class='day'>02</span> <span class='year'>2014</span></time>
+
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/various/'>various</a></span>
+</footer>
+
+
+</article>
+
 </div>
 
   
@@ -82,9 +100,51 @@
 
 <aside class="sidebar">
   
-    <section>
+    
+<section>
+  <h1>About Me</h1>
+  <div id="twitter-profile" style="margin-top:0.5em;">
+    <p>
+      <strong>Knapsy</strong> 
+      (<a href="http://twitter.com/TheKnapsy">@TheKnapsy</a>)
+    </p>
+    <p>Personal blog aiming to cover aspects of IT security, code snippets and techniques useful in penetration testing or security incident response, writeups for various CTF competitions or boot2root vulnerable VMs.</p>
+  </div>
+  <script type="text/javascript">
+    $(function(){
+        var container = $('#twitter-profile'),
+            user = "TheKnapsy";
+        
+        function parseTwLinks(s) {
+          var twUrl = "http://www.twitter.com/"
+          s = s.replace(/ (@([\w]+))/g, function(match, p1, p2) {
+              return " <a href='"+twUrl+p2+"'>"+p1+"</a>"
+          }).replace(/ (#([\w]+))/g, function(match, p1, p2) {
+              return " <a href='"+twUrl+"#!/search?q=%23"+p2+"'>"+p1+"</a>"
+          })
+          return s
+        }
+
+        $.ajax({
+            url: "http://api.twitter.com/1/users/show.json?include_entities=false&screen_name="+user+"&callback=?"
+          , type: 'GET'
+          , dataType: 'jsonp'
+          , error: function (err) { $('#twitter-profile').addClass('error');  }
+          , success: function(data) {
+              container.html('<img class="left" src="http://api.twitter.com/1/users/profile_image/'+user+'.json?size=bigger" alt="@'+user+'"><p><strong>'+data.name+'</strong> (<a href="http://twitter.com/'+user+'">@'+user+'</a>)<br/>'+data.location+'</p><p>'+parseTwLinks(data.description)+'</p>');
+            }
+        })
+      });
+  </script>
+</section>
+
+<section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/10/02/first-post/">First Post</a>
+      </li>
     
   </ul>
 </section>
@@ -100,7 +160,7 @@
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2014 - Your Name -
+  Copyright &copy; 2014 - Knapsy -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 

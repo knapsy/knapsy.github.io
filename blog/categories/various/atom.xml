@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Knapsy's brain dump]]></title>
-  <link href="http://knapsy.github.io/atom.xml" rel="self"/>
+  <title><![CDATA[Category: Various | Knapsy's brain dump]]></title>
+  <link href="http://knapsy.github.io/blog/categories/various/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
   <updated>2014-10-02T23:35:18+10:00</updated>
   <id>http://knapsy.github.io/</id>
