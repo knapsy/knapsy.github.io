@@ -107,45 +107,7 @@
 </div>
 <aside class="sidebar">
   
-    
-<section>
-  <h1>About Me</h1>
-  <div id="twitter-profile" style="margin-top:0.5em;">
-    <p>
-      <strong>Knapsy</strong> 
-      (<a href="http://twitter.com/TheKnapsy">@TheKnapsy</a>)
-    </p>
-    <p>Personal blog aiming to cover aspects of IT security, code snippets and techniques useful in penetration testing or security incident response, writeups for various CTF competitions or boot2root vulnerable VMs.</p>
-  </div>
-  <script type="text/javascript">
-    $(function(){
-        var container = $('#twitter-profile'),
-            user = "TheKnapsy";
-        
-        function parseTwLinks(s) {
-          var twUrl = "http://www.twitter.com/"
-          s = s.replace(/ (@([\w]+))/g, function(match, p1, p2) {
-              return " <a href='"+twUrl+p2+"'>"+p1+"</a>"
-          }).replace(/ (#([\w]+))/g, function(match, p1, p2) {
-              return " <a href='"+twUrl+"#!/search?q=%23"+p2+"'>"+p1+"</a>"
-          })
-          return s
-        }
-
-        $.ajax({
-            url: "http://api.twitter.com/1/users/show.json?include_entities=false&screen_name="+user+"&callback=?"
-          , type: 'GET'
-          , dataType: 'jsonp'
-          , error: function (err) { $('#twitter-profile').addClass('error');  }
-          , success: function(data) {
-              container.html('<img class="left" src="http://api.twitter.com/1/users/profile_image/'+user+'.json?size=bigger" alt="@'+user+'"><p><strong>'+data.name+'</strong> (<a href="http://twitter.com/'+user+'">@'+user+'</a>)<br/>'+data.location+'</p><p>'+parseTwLinks(data.description)+'</p>');
-            }
-        })
-      });
-  </script>
-</section>
-
-<section>
+    <section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
     
@@ -155,6 +117,13 @@
     
   </ul>
 </section>
+
+<section>
+  <h1>Latest Tweets</h1>
+  <p><a class="twitter-timeline" href="https://twitter.com/TheKnapsy" data-widget-id="517677537711767552">Tweets by @TheKnapsy</a></p>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
 
 
 
