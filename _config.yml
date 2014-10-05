@@ -3,11 +3,11 @@
 # ----------------------- #
 
 url: http://knapsy.github.io
-title: My Octopress Blog
-subtitle: A blogging framework for hackers.
-author: Your Name
+title: Knapsy's brain dump
+subtitle: IT security and other /dev/random stuff.
+author: Knapsy
 simple_search: https://www.google.com/search
-description:
+description: Personal blog aiming to cover aspects of IT security, present code snippets and techniques useful in penetration testing or security incident response as well as writeups from various CTF competitions.
 
 # Default date format is "ordinal" (resulting in "July 22nd 2007")
 # You can customize the format as defined in
@@ -51,7 +51,7 @@ titlecase: true       # Converts page and post titles to titlecase
 
 # list each of the sidebar modules you want to include, in the order you want them to appear.
 # To add custom asides, create files in /source/_includes/custom/asides/ and add them to the list like 'custom/asides/custom_aside_name.html'
-default_asides: [asides/recent_posts.html, asides/github.html, asides/delicious.html, asides/pinboard.html, asides/googleplus.html]
+default_asides: [custom/asides/about.html, asides/recent_posts.html, custom/asides/twitter.html, asides/github.html, asides/delicious.html, asides/pinboard.html, asides/googleplus.html]
 
 # Each layout uses the default asides, but they can have their own asides instead. Simply uncomment the lines below
 # and add an array with the asides you want to use.
@@ -70,8 +70,9 @@ github_show_profile_link: true
 github_skip_forks: true
 
 # Twitter
-twitter_user:
+twitter_user: TheKnapsy
 twitter_tweet_button: true
+twitter_widget_id: 517677537711767552
 
 # Google +1
 google_plus_one: false
@@ -92,10 +93,10 @@ delicious_count: 3
 
 # Disqus Comments
 disqus_short_name:
-disqus_show_comment_count: false
+disqus_show_comment_count: true
 
 # Google Analytics
-google_analytics_tracking_id:
+google_analytics_tracking_id: UA-55363999-1
 
 # Facebook Like
 facebook_like: false
