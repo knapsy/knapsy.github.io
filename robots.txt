@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: 
+
+Sitemap: http://knapsy.github.io/sitemap.xml 

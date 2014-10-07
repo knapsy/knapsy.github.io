@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Various | Knapsy's brain dump]]></title>
+  <link href="http://knapsy.github.io/blog/categories/various/atom.xml" rel="self"/>
+  <link href="http://knapsy.github.io/"/>
+  <updated>2014-10-06T11:06:35+11:00</updated>
+  <id>http://knapsy.github.io/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[First Post]]></title>
+    <link href="http://knapsy.github.io/blog/2014/10/02/first-post/"/>
+    <updated>2014-10-02T23:09:00+10:00</updated>
+    <id>http://knapsy.github.io/blog/2014/10/02/first-post</id>
+    <content type="html"><![CDATA[<p>First test post with Octopress and at the same time, first post on my first ever blog!</p>
+
+<p>I plan to use this blog as a bit of a brain dump of my ideas, tools and views, mainly focused on IT security.</p>
+
+<p>I will try to post variety of things, ranging from code snippets, tools and techniques useful in penetration testing or security incident response, various CTF competition writeups (one coming up very soon!) and some other random, geeky stuff&hellip; at least that&rsquo;s a plan&hellip; :)</p>
+]]></content>
+  </entry>
+  
+</feed>
