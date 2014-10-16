@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Vulnhub | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/vulnhub/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-10-16T22:02:52+11:00</updated>
+  <updated>2014-10-16T22:34:06+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -320,7 +320,7 @@ jason@knockknock:~$ echo $SHELL
 
 <h2>Core dump(ster) diving</h2>
 
-<p>Since now we have a normal shell, we can do regular stuff. First thing that stands out if <code>tfc</code> binary with SUID bit set! We may be able to get our root through there.</p>
+<p>Since now we have a normal shell, we can do regular stuff. First thing that stands out is <code>tfc</code> binary with SUID bit set! We may be able to get our root through there.</p>
 
 <pre><code>jason@knockknock:~$ ls -al
 total 32
@@ -450,7 +450,7 @@ hello
 
 <p>But first, how do I know what exactly to extract? I will need to know offset of where to start and length of the input I need.</p>
 
-<p>With trial and error (basically passing in input of varying lengths and checking address of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).</p>
+<p>With trial and error (basically passing in input of varying lengths and checking value of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).</p>
 
 <p>Cool, now we need to know where to start.</p>
 
