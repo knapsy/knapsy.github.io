@@ -61,7 +61,7 @@ From 172.16.246.133 icmp_seq=3 Destination Port Unreachable
 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 1999ms
 ```
 
-Ok, I admit, at this point I thought something went wrong with VM's network adapter, however, as zer0w1re pointed out, there's is a difference between "Host Unreachable" and "Port Unreachable"... ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what's displayed back on the screen! Duh!
+Ok, I admit, at this point I thought something went wrong with VM's network adapter, however, as [zer0w1re](https://twitter/zer0w1re) pointed out, there's is a difference between "Host Unreachable" and "Port Unreachable"... ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what's displayed back on the screen! Duh!
 
 
 Port knocking
@@ -209,7 +209,7 @@ Let's find something we can use to break in. Few things I looked at without any 
 * ```dirbuster``` didn't return anything interesting
 * tried to analyse and replay traffic using ```burpsuite```, but also wasn't able to find anything interesting, except some basic cache headers
 
-After poking around for ages, I got pretty frustrated, I couldn't find anything that would give me a way in! But after having a chat with [barrebas](https://twitter.com/barrebas), I realised that "picture is worth a thousand words" and decided to look into it closer.
+After poking around for ages, I got pretty frustrated, I couldn't find anything that would give me a way in! But after having a chat with [recrudesce](https://twitter.com/recrudesce), I realised that "picture is worth a thousand words" and decided to look into it closer.
 
 Initially I thought that I'll need to do some fancy stego on it, but first I downloaded the file, ran ```strings``` on it and found something very interesting at the bottom of the output.
 
@@ -280,7 +280,7 @@ jason@knockknock:~$ echo $SHELL
 /bin/rbash
 ```
 
-But thanks to Persistence, I've learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.
+But thanks to [Persistence](https://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup/), I've learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.
 
 ```
 jason@knockknock:~$ ftp
@@ -653,4 +653,4 @@ I have actually started reversing it and got a fair bit into it, but then got th
 
 I saw other guys reverse engineered the encryption mechanism and got it working as well, I'd recommend for you to go and check out what [leonjza](https://leonjza.github.io/blog/2014/10/14/knock-knock-whos-there-solving-knock-knock/) and [barrebas](http://barrebas.github.io/blog/2014/10/14/knock-knock-knocking-on-roots-door/) did!
 
-Again, awesome challenge - big thanks to [VulnHub](http://vulnhub.com) and zer0w1re!
+Again, awesome challenge - big thanks to [VulnHub](http://vulnhub.com) and [zer0w1re](https://twitter.com/zer0w1re)!
