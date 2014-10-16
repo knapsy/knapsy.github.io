@@ -20,7 +20,7 @@ So, as always, start up the pwn-able VM, Kali and get to work.
 First, use ```netdiscover``` to find out IP address of our victim.
 
 ```
-root@kali:~# netdiscover -r 172.16.246.129
+root@kali:~# netdiscover -r 172.16.246.129/24
 
  Currently scanning: 172.16.246.0/24   |   Screen View: Unique Hosts           
                                                                                
@@ -205,6 +205,7 @@ Ok, moving on - start up Iceweasel and let's have a look at the site.
 Let's find something we can use to break in. Few things I looked at without any luck:
 
 * robots.txt file doesn't exist
+* no cookies
 * ```dirbuster``` didn't return anything interesting
 * tried to analyse and replay traffic using ```burpsuite```, but also wasn't able to find anything interesting, except some basic cache headers
 
@@ -294,7 +295,7 @@ jason@knockknock:~$ echo $SHELL
 Core dump(ster) diving
 ----------------------
 
-Since now we have a normal shell, we can do regular stuff. First thing that stands out if ```tfc``` binary with SUID bit set! We may be able to get our root through there.
+Since now we have a normal shell, we can do regular stuff. First thing that stands out is ```tfc``` binary with SUID bit set! We may be able to get our root through there.
 
 ```
 jason@knockknock:~$ ls -al
@@ -433,7 +434,7 @@ root@kali:~# ulimit -c unlimited
 
 But first, how do I know what exactly to extract? I will need to know offset of where to start and length of the input I need.
 
-With trial and error (basically passing in input of varying lengths and checking address of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).
+With trial and error (basically passing in input of varying lengths and checking value of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).
 
 Cool, now we need to know where to start.
 
