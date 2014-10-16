@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Buffer Overflow | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/buffer-overflow/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-10-16T22:34:06+11:00</updated>
+  <updated>2014-10-16T22:36:24+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -31,7 +31,7 @@
 
 <p>First, use <code>netdiscover</code> to find out IP address of our victim.</p>
 
-<pre><code>root@kali:~# netdiscover -r 172.16.246.129
+<pre><code>root@kali:~# netdiscover -r 172.16.246.129/24
 
  Currently scanning: 172.16.246.0/24   |   Screen View: Unique Hosts           
 
@@ -238,6 +238,7 @@ Nmap done: 1 IP address (1 host up) scanned in 24.19 seconds
 
 <ul>
 <li>robots.txt file doesn&rsquo;t exist</li>
+<li>no cookies</li>
 <li><code>dirbuster</code> didn&rsquo;t return anything interesting</li>
 <li>tried to analyse and replay traffic using <code>burpsuite</code>, but also wasn&rsquo;t able to find anything interesting, except some basic cache headers</li>
 </ul>

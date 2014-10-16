@@ -123,7 +123,7 @@
 <span class='line-number'>9</span>
 <span class='line-number'>10</span>
 <span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# netdiscover -r 172.16.246.129
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# netdiscover -r 172.16.246.129/24
 </span><span class='line'>
 </span><span class='line'> Currently scanning: 172.16.246.0/24   |   Screen View: Unique Hosts           
 </span><span class='line'>                                                                               
@@ -408,6 +408,7 @@
 
 <ul>
 <li>robots.txt file doesn&rsquo;t exist</li>
+<li>no cookies</li>
 <li><code>dirbuster</code> didn&rsquo;t return anything interesting</li>
 <li>tried to analyse and replay traffic using <code>burpsuite</code>, but also wasn&rsquo;t able to find anything interesting, except some basic cache headers</li>
 </ul>
