@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Buffer Overflow | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/buffer-overflow/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-10-16T22:36:24+11:00</updated>
+  <updated>2014-10-16T22:50:06+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -70,7 +70,7 @@ From 172.16.246.133 icmp_seq=3 Destination Port Unreachable
 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 1999ms
 </code></pre>
 
-<p>Ok, I admit, at this point I thought something went wrong with VM&rsquo;s network adapter, however, as zer0w1re pointed out, there&rsquo;s is a difference between &ldquo;Host Unreachable&rdquo; and &ldquo;Port Unreachable&rdquo;&hellip; ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what&rsquo;s displayed back on the screen! Duh!</p>
+<p>Ok, I admit, at this point I thought something went wrong with VM&rsquo;s network adapter, however, as <a href="https://twitter/zer0w1re">zer0w1re</a> pointed out, there&rsquo;s is a difference between &ldquo;Host Unreachable&rdquo; and &ldquo;Port Unreachable&rdquo;&hellip; ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what&rsquo;s displayed back on the screen! Duh!</p>
 
 <h2>Port knocking</h2>
 
@@ -244,7 +244,7 @@ Nmap done: 1 IP address (1 host up) scanned in 24.19 seconds
 </ul>
 
 
-<p>After poking around for ages, I got pretty frustrated, I couldn&rsquo;t find anything that would give me a way in! But after having a chat with <a href="https://twitter.com/barrebas">barrebas</a>, I realised that &ldquo;picture is worth a thousand words&rdquo; and decided to look into it closer.</p>
+<p>After poking around for ages, I got pretty frustrated, I couldn&rsquo;t find anything that would give me a way in! But after having a chat with <a href="https://twitter.com/recrudesce">recrudesce</a>, I realised that &ldquo;picture is worth a thousand words&rdquo; and decided to look into it closer.</p>
 
 <p>Initially I thought that I&rsquo;ll need to do some fancy stego on it, but first I downloaded the file, ran <code>strings</code> on it and found something very interesting at the bottom of the output.</p>
 
@@ -308,7 +308,7 @@ jason@knockknock:~$
 /bin/rbash
 </code></pre>
 
-<p>But thanks to Persistence, I&rsquo;ve learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.</p>
+<p>But thanks to <a href="https://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup/">Persistence</a>, I&rsquo;ve learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.</p>
 
 <pre><code>jason@knockknock:~$ ftp
 ftp&gt; !/bin/bash
@@ -681,7 +681,7 @@ root password is "qVx4UJ*zcUdc9#3C$Q", but you should already have a shell, righ
 
 <p>I saw other guys reverse engineered the encryption mechanism and got it working as well, I&rsquo;d recommend for you to go and check out what <a href="https://leonjza.github.io/blog/2014/10/14/knock-knock-whos-there-solving-knock-knock/">leonjza</a> and <a href="http://barrebas.github.io/blog/2014/10/14/knock-knock-knocking-on-roots-door/">barrebas</a> did!</p>
 
-<p>Again, awesome challenge - big thanks to <a href="http://vulnhub.com">VulnHub</a> and zer0w1re!</p>
+<p>Again, awesome challenge - big thanks to <a href="http://vulnhub.com">VulnHub</a> and <a href="https://twitter.com/zer0w1re">zer0w1re</a>!</p>
 ]]></content>
   </entry>
   
