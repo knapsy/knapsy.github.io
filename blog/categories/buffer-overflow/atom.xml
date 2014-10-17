@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Buffer Overflow | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/buffer-overflow/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-10-16T22:53:15+11:00</updated>
+  <updated>2014-10-17T15:07:35+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -576,6 +576,8 @@ buf =
 <p>Bunch of shellcodes available for our target system, we&rsquo;ll use one that executes command, and the command will of course be <code>/bin/sh</code> :)</p>
 
 <p>Also, generating payload with <code>-b</code> switch allows us to specify characters to blacklist. We don&rsquo;t want any null bytes in our shellcode, so we&rsquo;ll blacklist that.</p>
+
+<p><em>EDIT: Thanks to <a href="https://twitter.com/TheColonial">TheColonial</a> for pointing this out - getting rid of NULL bytes is actually not required. NULL bytes are fine as we&rsquo;re reading from file and an entire file is read into memory!</em></p>
 
 <p>Ok, now we have all we need. Let&rsquo;s have a look how our final exploit will look like.</p>
 
