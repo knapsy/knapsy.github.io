@@ -231,7 +231,7 @@ Cool! We have something. Straight away I tried logging via SSH in with username:
 
 I started thinking what could it be, obviously it must have been somehow encrypted. Doesn't look like base64, neither like MD5. Let's go back to the ancient times and try a Caesar cipher.
 
-Again, thanks to barebass, who pointed me out to this useful resource [Caesarian Shift](http://rumkin.com/tools/cipher/caesar.php) I tried going through various different rotations and trying to find something that would like a human readable string. Nothing stood out straight away, but after few more tries and looking at a particularly popular ROT-13, I realised that the username and password were actually backwards!
+Using this useful resource [Caesarian Shift](http://rumkin.com/tools/cipher/caesar.php) I tried going through various different rotations and trying to find something that would like a human readable string. Nothing stood out straight away, but after few more tries and looking at a particularly popular ROT-13, I realised that the username and password were actually backwards!
 
 ```
 abfnW   -   Wnfba
@@ -563,6 +563,8 @@ buf =
 Bunch of shellcodes available for our target system, we'll use one that executes command, and the command will of course be ```/bin/sh``` :)
 
 Also, generating payload with ```-b``` switch allows us to specify characters to blacklist. We don't want any null bytes in our shellcode, so we'll blacklist that.
+
+*EDIT: Thanks to [TheColonial](https://twitter.com/TheColonial) for pointing this out - getting rid of NULL bytes is actually not required. NULL bytes are fine as we're reading from file and an entire file is read into memory!*
 
 Ok, now we have all we need. Let's have a look how our final exploit will look like.
 
