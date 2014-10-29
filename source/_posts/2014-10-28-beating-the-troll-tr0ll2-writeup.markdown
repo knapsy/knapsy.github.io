@@ -674,8 +674,8 @@ Essentially, we want to make the stack look as follows:
              ------------------               ------------------
              |                |    4 bytes    |      BBBB      |   dummy return from system()
              |  Rest of the   |               ------------------
-             |     stack      |    4 bytes    | /tmp/pwn (EGG) |   arguments to system() - address of string of our malicious program name
-             |                |               ------------------
+             |     stack      |    4 bytes    | /bin/sh (&EGG) |   address of the EGG environment variable
+             |                |               ------------------   containing string argument passed to system()
              |      ...       |               |       ...      |
      FFFF
 {% endcodeblock %}
@@ -744,7 +744,7 @@ root
 # 
 ```
 
-Got it! On the 3rd try, didn't seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find *EXACT* addres where it starts... in some situations it could be pretty hard if not impossible to do!
+Got it! On the 3rd try, didn't seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find *EXACT* address where it starts... in some situations it could be pretty hard if not impossible to do!
 
 Oh, right, let's get the flag!
 
