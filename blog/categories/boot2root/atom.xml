@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Boot2root | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/boot2root/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-10-29T00:19:45+11:00</updated>
+  <updated>2014-10-29T11:34:29+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -701,8 +701,8 @@ root
 </span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
 </span><span class='line'>             |                |    4 bytes    |      BBBB      |   dummy return from system()
 </span><span class='line'>             |  Rest of the   |               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
-</span><span class='line'>             |     stack      |    4 bytes    | /tmp/pwn (EGG) |   arguments to system() - address of string of our malicious program name
-</span><span class='line'>             |                |               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |     stack      |    4 bytes    | /bin/sh (&amp;EGG) |   address of the EGG environment variable
+</span><span class='line'>             |                |               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;   containing string argument passed to system()
 </span><span class='line'>             |      &hellip;       |               |       &hellip;      |
 </span><span class='line'>     FFFF</span></code></pre></td></tr></table></div></figure></p>
 
@@ -769,7 +769,7 @@ root
 # 
 </code></pre>
 
-<p>Got it! On the 3rd try, didn&rsquo;t seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find <em>EXACT</em> addres where it starts&hellip; in some situations it could be pretty hard if not impossible to do!</p>
+<p>Got it! On the 3rd try, didn&rsquo;t seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find <em>EXACT</em> address where it starts&hellip; in some situations it could be pretty hard if not impossible to do!</p>
 
 <p>Oh, right, let&rsquo;s get the flag!</p>
 
