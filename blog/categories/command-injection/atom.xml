@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Command Injection | Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/blog/categories/command-injection/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-11-06T14:06:24+11:00</updated>
+  <updated>2014-11-06T17:59:07+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -1762,6 +1762,10 @@ http://wi-fu.co.uk, #VulnHub IRC or Twitter.
 <h2>Summary</h2>
 
 <p>Awesome challenge! Spent quite a lot of hours (on and off) working on it, I liked the multi-layered design of it and how it touched on quite a lot of aspects of security! Also I managed to brush up on some of the forensics skills and learnt something new about key reuse :) Great job building it up <a href="https://twitter.com/_RastaMouse">Rasta Mouse</a>!</p>
+
+<p>Oh, also, obligatory network diagram of the whole thing.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/diagram.png" title="Diagram" alt="Diagram" /></p>
 ]]></content>
   </entry>
   
