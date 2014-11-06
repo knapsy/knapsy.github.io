@@ -1571,3 +1571,8 @@ Summary
 -------
 
 Awesome challenge! Spent quite a lot of hours (on and off) working on it, I liked the multi-layered design of it and how it touched on quite a lot of aspects of security! Also I managed to brush up on some of the forensics skills and learnt something new about key reuse :) Great job building it up [Rasta Mouse](https://twitter.com/_RastaMouse)!
+
+Oh, also, obligatory network diagram of the whole thing.
+
+![Diagram](/images/posts/2014-11-05-kvasir-vm-writeup/diagram.png "Diagram")
+
