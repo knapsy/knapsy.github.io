@@ -3,7 +3,7 @@ layout: post
 title: "PNG from hell - Ruxcon CTF challenge"
 date: 2014-11-17 11:43:20 +1100
 comments: true
-categories: png, ctf, ruxcon, python, quoted printable
+categories: [png, ctf, ruxcon, python, quoted printable]
 ---
 
 Some time ago now I was lucky enough to take part in [Ruxcon CTF](https://ruxcon.org.au/events/ctf/), which was absolutely awesome - learnt bunch of new things and met heaps of cool people!
