@@ -4,7 +4,7 @@
   <title><![CDATA[Knapsy's brain dump]]></title>
   <link href="http://knapsy.github.io/atom.xml" rel="self"/>
   <link href="http://knapsy.github.io/"/>
-  <updated>2014-11-17T14:02:50+11:00</updated>
+  <updated>2014-12-17T06:58:00+11:00</updated>
   <id>http://knapsy.github.io/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -12,6 +12,28 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Pegasus Has Arrived - My First Boot2root VM]]></title>
+    <link href="http://knapsy.github.io/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/"/>
+    <updated>2014-12-16T21:54:34+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm</id>
+    <content type="html"><![CDATA[<p>It&rsquo;s here! My first boot2root VM, inspired by various CTFs I attended this year and couple cool things I learnt, is finally here! Go and grab it from <a href="https://www.vulnhub.com/entry/pegasus-1,109/">here (via VulnHub)</a>.</p>
+
+<!-- more -->
+
+
+<h2>Overview</h2>
+
+<p>Without giving out too much, I tried to design it the way it will exercise your patience and force you to think outside the box. Sometimes the obvious is not the right solution and sometimes the fundamentals and creativity pay off.</p>
+
+<p>Huge thanks to <a href="https://twitter.com/g0tmi1k">g0tmi1k</a> for hosting the VM and a massive shoutout to <a href="https://twitter.com/iMulitia">mulitia</a> for beta-testing it!</p>
+
+<p>Why the name? No particular reason&hellip; seemes like some of the VMs at <a href="https://www.vulnhub.com/">VulnHub</a> got their names from mythology, so just jumped on the bandwagon :)</p>
+
+<p>Feel free to hit me up with some feedback, I&rsquo;d love to hear from you!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PNG From Hell - Ruxcon CTF Challenge]]></title>
