@@ -3,6 +3,14 @@
   
   
   <url>
+    <loc>http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips/</loc>
+    
+    <lastmod>2015-03-29T18:18:03+11:00</lastmod>
+    
+    <priority>0.8</priority>
+  </url>
+  
+  <url>
     <loc>http://knapsy.github.io/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/</loc>
     
     <lastmod>2014-12-16T21:54:34+11:00</lastmod>
@@ -69,14 +77,14 @@
   
   <url>
     <loc>http://knapsy.github.io/blog/archives/</loc>
-    <lastmod>2014-12-17T06:58:00+11:00</lastmod>
+    <lastmod>2015-04-03T18:03:16+11:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
     <loc>http://knapsy.github.io/</loc>
-    <lastmod>2014-12-17T06:58:00+11:00</lastmod>
+    <lastmod>2015-04-03T18:03:16+11:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
