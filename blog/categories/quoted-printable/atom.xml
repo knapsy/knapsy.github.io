@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Quoted Printable | Knapsy's brain dump]]></title>
+  <link href="http://knapsy.github.io/blog/categories/quoted-printable/atom.xml" rel="self"/>
+  <link href="http://knapsy.github.io/"/>
+  <updated>2015-04-03T18:03:16+11:00</updated>
+  <id>http://knapsy.github.io/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[PNG From Hell - Ruxcon CTF Challenge]]></title>
+    <link href="http://knapsy.github.io/blog/2014/11/17/png-from-hell-ruxcon-ctf-challenge/"/>
+    <updated>2014-11-17T11:43:20+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/11/17/png-from-hell-ruxcon-ctf-challenge</id>
+    <content type="html"><![CDATA[<p>Some time ago now I was lucky enough to take part in <a href="https://ruxcon.org.au/events/ctf/">Ruxcon CTF</a>, which was absolutely awesome - learnt bunch of new things and met heaps of cool people!</p>
+
+<p>There was a wide variety of different challenges, but this particular one REALLY did my head in. I spent way too much time on it during the CTF and unfortunately didn&rsquo;t manage to break it. Then recently, I decided to take a look at it again and, with a lot less hassle than I thought, I nailed it!</p>
+
+<p>Let me introduce you to my most hated PNG of all times&hellip;</p>
+
+<!-- more -->
+
+
+<h2>Introduction</h2>
+
+<p>Alright, let&rsquo;s get started, the goal is to find the flag in the following <a href="/images/posts/2014-11-17-png-from-hell-ruxcon-ctf-challenge/oubliette.pcap">packet capture</a>.</p>
+
+<p>Before we get to it, I owe a huge shout-out to <a href="https://twitter.com/TheColonial">TheColonial</a> for directing me onto the right path when solving this one&hellip; simply, sometimes it&rsquo;s best to write your own tools!</p>
+
+<h2>Diving into packet capture</h2>
+
+<p>Looking at the packet capture, we can quickly see that it&rsquo;s an SMTP traffic. Let&rsquo;s have a closer look at the TCP stream (right click on any packet of interest -> Follow TCP Stream).</p>
+
+<p><img src="/images/posts/2014-11-17-png-from-hell-ruxcon-ctf-challenge/tcp_stream.png" alt="TCP stream" /></p>
+
+<p>Looks like the transmitted email message will be of the most interest to us - let&rsquo;s extract it:</p>
+
+<ul>
+<li>Select to show packets going one way only (to the server)</li>
+<li>Save as <em>raw</em> data extract</li>
+</ul>
+
+
+<p><img src="/images/posts/2014-11-17-png-from-hell-ruxcon-ctf-challenge/raw_email.png" alt="Raw email" /></p>
+
+<h2>Raw email</h2>
+
+<p>Ok, so we have extracted email from the packet capture. Looking at the email, we can see that there&rsquo;s not much of useful plaintext information in the email (subject is just some gibberish), but there&rsquo;s an attachment that we&rsquo;ll need to focus on.</p>
+
+<p>Few things on the attachment looking at the MIME headers and the attachment itself:</p>
+
+<ul>
+<li>it&rsquo;s encoded as quoted-printable</li>
+<li>it looks like a PNG file (looking at first few bytes of the attachment)</li>
+</ul>
+
+
+<p>Let&rsquo;s remove all email relevant lines from the file and leave only quoted-printable PNG, making it look like this:</p>
+
+<pre><code>root@kali:~/data/ctf/ruxcon2014# cat email_raw
+=89PNG
+=1A
+IHDR=00=00=01@=00=00=00=1E=10=02=00=00=00=82=91=8C=8D=00=00=18zID=
+ATx=DA=ED=9Dy\L=EB=1B=C0=9F=D9g=9A=D6I=A5$EIRYn=A5,=85=BA=EAR=B2=C4=CF=BD=
+
+... truncated ...
+
+=F8O=87=A0u=FB=18.=12M@k=E7=D0.R=AB=88~=1B=05=FA=EB=EE=1Dw.=D53I=B2,=11\l=
+=E9:=12=FC=13=C2k=04=04=04m=03b=11=16=01=01=01=01=01A=0B=F0=9F~=03&amp;=20=20=
+=20=20=20h)=FE=0F=EF=91=EEe=FB=80=FE=9E=00=00=00=00IEND=AEB`=82
+</code></pre>
+
+<p>Cool, so we have a quoted-printable PNG file. There&rsquo;s a problem though - there are carriage returns added before every meaningful new line (part of quoted-printable encoding)! They&rsquo;re easily visible when you open it up, for example, in <code>vim</code>.</p>
+
+<p><img src="/images/posts/2014-11-17-png-from-hell-ruxcon-ctf-challenge/vim.png" alt="Vim" /></p>
+
+<p>Right&hellip; let&rsquo;s keep that in mind, it&rsquo;s something we&rsquo;ll need to get rid of.</p>
+
+<h2>Plan of attack</h2>
+
+<p>There are couple things we already know about the attachment, so we can have some sort of a plan of attack. Seems that we&rsquo;ll need to do the following:</p>
+
+<ul>
+<li>decode quoted-printable file</li>
+<li>get rid of CRs before new lines</li>
+<li>ensure we haven&rsquo;t corrupted PNG file header</li>
+</ul>
+
+
+<p>Seems pretty straight forward!</p>
+
+<p>And that&rsquo;s exactly what I was also trying to do during the CTF, however, I was using pre-made tools for everything! I found some website that was accepting quoted printable files and spitting out decoded version, then I was using <code>vim</code> with <code>xxd</code> to get rid of CRs and manually playing with PNG file header.</p>
+
+<p>It was all resulting in a corrupted PNG throwing all kinds of different errors. After lots of research, frustration and talking to <a href="http://buffered.io">OJ</a>, I have decided to write my own tool to do it all for me.</p>
+
+<h2>Quoted-Printable</h2>
+
+<p>Before we start, few words on <a href="http://en.wikipedia.org/wiki/Quoted-printable">Quoted-Printable</a> encoding. There are couple of rules that we&rsquo;ll need to keep in mind:</p>
+
+<ul>
+<li>any 8 bit value may be encoded with 3 characters: <code>=</code>, followed by two hex digits representing the byte&rsquo;s numberic value</li>
+<li>all printable ASCII characters are represented as themselves (no <code>=</code> required)</li>
+<li>all lines cannot be longer than 76 characters, soft line breaks may be added (<code>=</code> at the end of the line) to allow encoding very long lines without line breaks</li>
+</ul>
+
+
+<h2>PNG header</h2>
+
+<p>Also, it&rsquo;s important to understand how <a href="http://www.libpng.org/pub/png/spec/1.2/PNG-Rationale.html#R.PNG-file-signature">PNG header</a> looks like and why.</p>
+
+<pre><code>   (hexadecimal)           89  50  4e  47  0d  0a  1a  0a
+   (ASCII C notation)    \211   P   N   G  \r  \n \032 \n
+</code></pre>
+
+<ul>
+<li>First two bytes distinguish PNG files on systems that expect the first two bytes to identify the file type. It also catches bad file transfers that clear bit 7.</li>
+<li>The next 3 bytes represent name of the format</li>
+<li>The CR-LF sequence (<code>0d 0a</code>) catches bad file transfers that alter new line sequences</li>
+<li><code>1a</code> stops file display under MS-DOS</li>
+<li>The final LF checks for the inverse of the CR-LF translation problem</li>
+</ul>
+
+
+<h2>Writing own decoder</h2>
+
+<p>Okay, so now we have a good understanding of the theory behind it all, so let&rsquo;s code something up!</p>
+
+<p>Again, recapping, what we&rsquo;ll need to do is:</p>
+
+<ul>
+<li>decode quoted printable, following basic rules listed above and ensuring to handle soft line breaks properly (i.e. omit decoding of them)</li>
+<li>get rid of CRs from CR-LF sequences, <em>except</em> the one from the PNG header</li>
+</ul>
+
+
+<p>The following Python code does it all.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='Python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">raw_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">email_raw</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">rb</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
+</span><span class='line'><span class="n">output_png</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">output</span><span class="o">.</span><span class="n">png</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">w</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Read</span> <span class="ow">in</span> <span class="nb">all</span> <span class="n">lines</span> <span class="ow">and</span> <span class="n">save</span> <span class="ow">in</span> <span class="n">one</span> <span class="nb">long</span> <span class="n">stream</span> <span class="n">of</span> <span class="n">chars</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">content</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">raw_file</span><span class="o">.</span><span class="n">readlines</span><span class="p">())</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'><span class="k">while</span> <span class="n">i</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span> <span class="nb">len</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
+</span><span class='line'>    <span class="c"># Part of quoted printable, 2 characters following &amp;lsquo;=&amp;rsquo; are a hex</span>
+</span><span class='line'>    <span class="c"># representation of a symbol. Decode it and write to the output file.</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">=&amp;</span><span class="n">rdquo</span><span class="p">;:</span>
+</span><span class='line'>        <span class="c"># If they&amp;rsquo;re not /r/n (soft line break of quoted printable),</span>
+</span><span class='line'>        <span class="c"># write them in, otherwise ignore</span>
+</span><span class='line'>        <span class="k">if</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span>\<span class="n">r</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span> <span class="ow">and</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span>\<span class="n">n</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;:</span>
+</span><span class='line'>            <span class="n">output_png</span><span class="o">.</span><span class="n">write</span><span class="p">((</span><span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">2</span><span class="p">])</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;))</span>
+</span><span class='line'>        <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">2</span>   <span class="c"># increment counter by 2 (read 2 characters already)</span>
+</span><span class='line'>    <span class="k">else</span><span class="p">:</span>
+</span><span class='line'>        <span class="c"># Also part of quoted printable, characters that can be</span>
+</span><span class='line'>        <span class="c"># represented in ASCII are kept as themselves.</span>
+</span><span class='line'>        <span class="c">#</span>
+</span><span class='line'>        <span class="c"># if the character is &amp;lsquo;\r&amp;rsquo; followed by &amp;lsquo;\n&amp;rsquo; - ignore,  write</span>
+</span><span class='line'>        <span class="c"># &amp;lsquo;\n&amp;rsquo; only, unless it&amp;rsquo;s a part of the PNG header (7th byte)</span>
+</span><span class='line'>        <span class="k">if</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span>\<span class="n">r</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span> <span class="ow">and</span> <span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span>\<span class="n">n</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">!=</span> <span class="mi">6</span><span class="p">:</span>
+</span><span class='line'>            <span class="n">output_png</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>   <span class="c"># increment counter by 1 (wrote \n)</span>
+</span><span class='line'>        <span class="k">else</span><span class="p">:</span>
+</span><span class='line'>            <span class="n">output_png</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>   <span class="c"># increment counter by 1 (moving on to the next character)&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">raw_file</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span><span class='line'><span class="n">output_png</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Run it on the previously extracted raw email file.</p>
+
+<pre><code>root@kali:~/data/ctf/ruxcon2014# python decode.py
+</code></pre>
+
+<p>And open up <code>output.png</code> file.</p>
+
+<p><img src="/images/posts/2014-11-17-png-from-hell-ruxcon-ctf-challenge/output.png" alt="Output PNG" /></p>
+
+<p>That&rsquo;s it!</p>
+
+<h2>Summary</h2>
+
+<p>It was actually a lot easier than I thought&hellip; once you know the theory behind it all, understand what&rsquo;s the actual problem we&rsquo;re facing here (CR-LF conversion issue) and write your own tool to do it (not sure why all of the tools I tried didn&rsquo;t do it properly), it&rsquo;s actually not that hard&hellip; and only handful of people managed to complete it at the CTF!</p>
+
+<p>Looking back at it, it was pretty frustrating, but I didn&rsquo;t take time to properly read through all the basics during the CTF and I was trying to quickly hack some ad-hoc solution, which didn&rsquo;t work well at all. I guess the time pressure and the thought that <em>&ldquo;there are so many other challenges to hack to get points&rdquo;</em> sometimes takes over calm, logical thinking. Next time I&rsquo;ll try to take a step back and really ask myself <em>&ldquo;what are we trying to solve here&rdquo;</em>.</p>
+
+<p>I&rsquo;m so glad I managed to finish it, it was really doing my head in and, in the end, I learnt a lot from it!</p>
+]]></content>
+  </entry>
+  
+</feed>

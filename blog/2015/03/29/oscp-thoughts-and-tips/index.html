@@ -1,0 +1,333 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>OSCP - Thoughts and Tips - Knapsy&#8217;s brain dump</title>
+  <meta name="author" content="Knapsy">
+
+  
+  <meta name="description" content="I&rsquo;ve been pretty quiet on here for the last couple months as I&rsquo;ve been really busy taking Penetration testing with Kali Linux (PWK) &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Knapsy's brain dump" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-55363999-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Knapsy&#8217;s brain dump</a></h1>
+  
+    <h2>IT security and other /dev/random stuff.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:knapsy.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">OSCP - Thoughts and Tips</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2015-03-29T18:18:03+11:00'><span class='date'><span class='date-month'>Mar</span> <span class='date-day'>29</span><span class='date-suffix'>th</span>, <span class='date-year'>2015</span></span> <span class='time'>6:18 pm</span></time>
+        
+           | <a href="#disqus_thread"
+             data-disqus-identifier="http://knapsy.github.io">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>I&rsquo;ve been pretty quiet on here for the last couple months as I&rsquo;ve been really busy taking <a href="https://www.offensive-security.com/information-security-training/penetration-testing-with-kali-linux/">Penetration testing with Kali Linux (PWK)</a> training course, followed by the <a href="https://www.offensive-security.com/information-security-certifications/oscp-offensive-security-certified-professional/">Offensive Security Certified Professional (OSCP)</a> exam.</p>
+
+<p>You&rsquo;ll find tons of other blog posts and reviews about the course and exam itself, so I won&rsquo;t be repeating what you should be able to find elsewhere, instead, I&rsquo;ll just try to give you a brief overview of what it is, how did I find it and some simple tips and tricks that will help you prepare for it.</p>
+
+<!-- more -->
+
+
+<h2>Overview</h2>
+
+<p>So, what PWK really is? In simple terms, it&rsquo;s a bunch of vulnerable VMs (around 50-ish) in a specially crafted network that is supposed to simulate real corporate environment.</p>
+
+<p>You&rsquo;ve got various different subnets, variety of machines (Windows, Linux, FreeBSD, you name it) with heaps of different vulnerabilities. The goal is to hack into as many of them as you can and obtain the highest privilege access (either Administrator/SYSTEM or root).</p>
+
+<p>You can buy access to the lab for 30, 60 or 90 days and keep extending it for another 30 days.</p>
+
+<p>What&rsquo;s OSCP? It&rsquo;s a certification that you get after you pass the exam, which is again, smaller number of vulnerable VMs that you need to break into. The trick is that you only have 24 hours to do so.</p>
+
+<h2>Labs</h2>
+
+<p>First of all, you shouldn&rsquo;t really treat this as a typical certification, where you study a bit, pass the exam and forget most of the stuff you&rsquo;ve done in the next couple weeks.</p>
+
+<p>It&rsquo;s a learning process where you&rsquo;ll be able to figure out a lot of things all by yourself, find methodology that works best, develop your own scripts/tools to assist you with your work in the long run (and not only during the labs/exam), build up your knowledge base on known vulnerabilities and exploits plus a whole lot more.</p>
+
+<blockquote><p>&ldquo;It&rsquo;s all about the journey, not the destination&rdquo;</p></blockquote>
+
+<p>You gonna spend a lot of time researching, failing and researching more during your time in the labs. It may be quite annoying at times, you may feel inadequate, angry, but then you&rsquo;ll figure it out, move on to the next machine and the process starts again. Sounds annoying, but in the long run, it&rsquo;s very rewarding!</p>
+
+<p>What you also need to know that it&rsquo;s VERY time consuming. If you can&rsquo;t dedicate regular time to it (at least couple hours every day), you&rsquo;re not going to benefit from it and enjoy it.</p>
+
+<p>All failed exploits, research and enumeration is also a learning process, but it does take time&hellip; a lot of time! There will be days where you will go with no machines compromised and a lot of failed attempts and then there will be days where you&rsquo;ll get 4 machines in a single day (that you probably wouldn&rsquo;t if you didn&rsquo;t fail earlier on!).</p>
+
+<p>The labs will teach you numerous things, but most importantly, it&rsquo;ll put you in a right mindset to think like a hacker. As soon as you stop thinking like a good guy, you&rsquo;ll begin to succeed. It happened to me! I was trying to follow a process, be quite formal about it all and&hellip; I wasn&rsquo;t going too far very quickly. As soon as I started thinking like a bad guy and asking myself &ldquo;how can I benefit from it?&rdquo; about almost everything I came across, I started moving forward&hellip; quickly! It all starts with mentality.</p>
+
+<p>Then, methodology - you&rsquo;ll figure out on your own what approach works best, how to track and document everything, how to keep notes, what steps to take with every machine, how to find yourself amongst a large number of machines and vulnerabilities.</p>
+
+<p>And then there&rsquo;s technical part. Without spoiling, you&rsquo;ll learn a lot about Windows and Unix privilege escalation, web vulnerabilities, a bit on exploit development (basics), you&rsquo;ll come across bad and default configurations, weak passwords, silly users and more!</p>
+
+<p>There&rsquo;s no real goal, it&rsquo;s all about learning and&hellip; personal achievements :) Some people want to break into every single machine, some want to get to the administrative domain, some want to get a &lsquo;big 3&rsquo; - machines called pain, sufference and humble. At the end of the day, it&rsquo;s all about learning! Do as much as you need to learn and feel comfortable tackling new and unknown challenges.</p>
+
+<h2>Exam</h2>
+
+<p>Exam is, well, intense. You&rsquo;ve got 5 machines and you&rsquo;ll need to break into at least 4 of them to pass.</p>
+
+<p>The difficulty is not the machines themselves though, it&rsquo;s the time constraint! Given that you only have 24 hours, there&rsquo;s not much time to sleep. The machines are quite similar to those in the labs, but of course, not exactly the same. As long as you&rsquo;ve done majority of the machines in the labs, you should have seen enough to be able to relatively comfortably tackle the exam.</p>
+
+<p>Again, it&rsquo;s all about the approach and methodology, I can&rsquo;t say when you&rsquo;re ready or not, you will find it out yourself as you&rsquo;ll be going through the labs.</p>
+
+<h2>Tips</h2>
+
+<p>I want to list couple things that I think helped me preparing to take the course and what I found useful over the course of the labs and exam:</p>
+
+<ul>
+<li><a href="https://vulnhub.com">vulnhub.com</a> - if you haven&rsquo;t checked that out yet, stop reading and go there NOW! Bunch of awesome VMs that were created to be hacked. Variety of different difficulties, vulnerabilities and great community to be a part of, I cannot recommend it enough!</li>
+<li>attend some CTFs in your area or online, you&rsquo;ll meet bunch of awesome people and learn new things as you go</li>
+<li>familiarise yourself with at least 1 or 2 scripting languages - probably Python and Unix shell scripting, creating your own tools, automating tasks and reading and understanding exploits will be a lot easier</li>
+<li>Enumerate, enumerate, enumerate&hellip; oh, did I mention enumerating? Yeah, enumerate! That&rsquo;s really what pentesting/hacking is all about, you want to find out as much as you can about your target and as you&rsquo;re doing it, any potential vulnerabilities and security holes will eventually jump out to you. Exploitation is just a tiny part of it, finding the way in is what takes time, knowledge and experience</li>
+<li>If needed, slow down or stop and try to UNDERSTAND why the things don&rsquo;t work or behave a certain way. Don&rsquo;t fire off bunch of different exploits onto services if you don&rsquo;t know what do they do, how do they work, what version they are etc. etc. Remember, it&rsquo;s all about the journey (learning), not the destination (just passing the exam)</li>
+<li>If some tools don&rsquo;t work - try to figure out why, find new versions or alternative tools that are being continually developed. If needed, create your own! :)</li>
+<li>Learn to keep good notes, document every step you&rsquo;ve taken, every exploit you used and take screenshots along the way, maybe even develop a cheatsheet of things that you frequently do (e.g. <code>hydra</code> or <code>wfuzz</code> common syntax, take note of useful Windows and Linux kernel exploits etc.)</li>
+</ul>
+
+
+<h2>Summary</h2>
+
+<p>I loved every single moment of the PWK and would definitely recommend it to everyone!</p>
+
+<p>Few things to keep in mind:</p>
+
+<ul>
+<li>you need to be able to dedicate quite significant amount of time to it if you want to be successful</li>
+<li>you have to be genuinely interested and willing to learn new things</li>
+<li>you cannot be affraid of failure - you will be failing multiple times throughout the course of labs</li>
+<li>it will teach you many cool things, but will also teach you to learn - how to look for information and approach problems</li>
+<li>get some quality sleep before exam - you won&rsquo;t get much of it during the 24h challenge</li>
+<li>set yourself a goal and work towards it - wether it&rsquo;s get all machines in the labs or break into the &ldquo;big 3&rdquo;, whatever to keep you motivated. Of course aim to get as many machines as you can, every single one will teach you something new</li>
+<li>enumerate, enumerate, enumerate</li>
+<li>go through the provided notes and exercises before starting the lab - it will be helpful down the track</li>
+<li>it is HEAPS of fun!</li>
+</ul>
+
+
+<p>If you have any questions, feel free to hit me up on Twitter <a href="https://twitter.com/TheKnapsy">@TheKnapsy</a> or IRC on one of the channels I usually hang out at - #vulnhub or #offsec on <a href="https://freenode.net/">Freenode</a>.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Knapsy</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2015-03-29T18:18:03+11:00'><span class='date'><span class='date-month'>Mar</span> <span class='date-day'>29</span><span class='date-suffix'>th</span>, <span class='date-year'>2015</span></span> <span class='time'>6:18 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/offensive-security/'>offensive security</a>, <a class='category' href='/blog/categories/oscp/'>oscp</a>, <a class='category' href='/blog/categories/pentesting/'>pentesting</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips/" data-via="TheKnapsy" data-counturl="http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/" title="Previous Post: Pegasus has arrived - my first boot2root VM">&laquo; Pegasus has arrived - my first boot2root VM</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>About Me</h1>
+  <p><img src="https://pbs.twimg.com/profile_images/511488232572207105/wmx1Ld7X_bigger.jpeg" align="right"/><strong>Knapsy</strong> (<u><a href="http://twitter.com/TheKnapsy">@TheKnapsy</a></u>)<br/>
+  IT security guy, software engineer, basketballer, coffee enthusiast. Creative, a bit crazy, sleep deprived.</p>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/oscp-thoughts-and-tips/">OSCP - Thoughts and Tips</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/12/16/pegasus-has-arrived-my-first-boot2root-vm/">Pegasus Has Arrived - My First Boot2root VM</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/17/png-from-hell-ruxcon-ctf-challenge/">PNG From Hell - Ruxcon CTF Challenge</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/05/kvasir-vm-writeup/">Kvasir VM Writeup</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/">Beating the Troll - Tr0ll2 Writeup</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>Latest Tweets</h1>
+  <p><a class="twitter-timeline" href="https://twitter.com/TheKnapsy" data-widget-id="517677537711767552">Tweets by @TheKnapsy</a></p>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Knapsy -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'knapsysbraindump';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips/';
+        var disqus_url = 'http://knapsy.github.io/blog/2015/03/29/oscp-thoughts-and-tips/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
