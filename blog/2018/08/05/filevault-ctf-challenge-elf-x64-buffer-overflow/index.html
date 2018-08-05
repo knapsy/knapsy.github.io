@@ -1,0 +1,520 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>FileVault CTF Challenge - ELF X64 Buffer Overflow - Knapsy&#8217;s brain dump</title>
+  <meta name="author" content="Knapsy">
+
+  
+  <meta name="description" content="It&rsquo;s been quite a while since I have done a CTF, but just very recently I got a chance to participate in one and came across a pretty &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://blog.knapsy.com/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Knapsy's brain dump" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-55363999-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Knapsy&#8217;s brain dump</a></h1>
+  
+    <h2>IT security and other /dev/random stuff.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:blog.knapsy.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">FileVault CTF Challenge - ELF X64 Buffer Overflow</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2018-08-05T16:31:31+10:00'><span class='date'><span class='date-month'>Aug</span> <span class='date-day'>5</span><span class='date-suffix'>th</span>, <span class='date-year'>2018</span></span> <span class='time'>4:31 pm</span></time>
+        
+           | <a href="#disqus_thread"
+             data-disqus-identifier="http://blog.knapsy.com">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>It&rsquo;s been quite a while since I have done a CTF, but just very recently I got a chance to participate in one and came across a pretty interesting challenge which forced me to go back and re-learn exploit dev in Unix environments. Also had to brush up on my <code>gdb</code> knowledge&hellip;</p>
+
+<!--more-->
+
+
+<h2>Background</h2>
+
+<p>The challenge required participants to connect to a remote server on a specific port to interact with a simple <code>FileVault</code> application.</p>
+
+<p>Offline copy of the application has been provided for analysis.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@debian:/opt/checksec# file FileVault 
+</span><span class='line'>FileVault: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=24cf4afa0525b2c402542c56bbd80f585c80694f, stripped
+</span><span class='line'>
+</span><span class='line'>root@debian:/opt/checksec# ./checksec.sh --file FileVault 
+</span><span class='line'>RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+</span><span class='line'>Partial RELRO   No canary found   NX disabled   PIE enabled     No RPATH   No RUNPATH   FileVault</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We&rsquo;re dealing with x64 ELF binary that doesn&rsquo;t have any protections enabled that should cause us any troubles later on.</p>
+
+<h2>Understanding the application</h2>
+
+<p>Let&rsquo;s play with the application and see what it does.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/Incorrect_code.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/Incorrect_code.png" alt="image" /></a></p>
+
+<p>It expects some sort of a code (that we don&rsquo;t have).</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/2.Code_too_long.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/2.Code_too_long.png" alt="image" /></a></p>
+
+<p>Also let&rsquo;s note that when we provide code that is too long (more than 16 characters), we get a little bit different error message.</p>
+
+<p>Let&rsquo;s throw the application into IDA and see what is it actually supposed to be doing.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/3.Main_func_strlen_check.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/3.Main_func_strlen_check.png" alt="image" /></a></p>
+
+<p>As you can see, we&rsquo;re reading an input string using <code>scanf()</code> and check its length with <code>strlen()</code> - if it&rsquo;s longer than 16 characters, it displays additional error message (&ldquo;Incorrect login attempted.&rdquo;).</p>
+
+<p>However, it&rsquo;s important to note that, apart from printing that error message, it doesn&rsquo;t actually do anything else, the application just continues execution.</p>
+
+<p>Generally you&rsquo;d think that this sort of check would cause the application to exit if the condition is not met, but it&rsquo;s not the case here - we can simply ignore it and not worry about it at all.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/5.Decision_func.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/5.Decision_func.png" alt="image" /></a></p>
+
+<p>This one is interesting, clearly there&rsquo;s some sort of decision mechanisms that establishes whether the code is valid or not.</p>
+
+<p>After number of checks, if everything goes fine, we get to &ldquo;Shell Access Granted&rdquo; and call subroutine <code>sub_91A</code>.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/13.execfunc.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/13.execfunc.png" alt="image" /></a></p>
+
+<p>And this function simply calls <code>/bin/sh -i</code> giving us back an interactive shell.</p>
+
+<h2>Digging deeper</h2>
+
+<p>As now we have an understanding what the application is doing, let&rsquo;s see if we can bypass the authentication mechanism. Remember that we can&rsquo;t simply patch the binary out as our end-goal is to exploit a remote instance, so most likely we&rsquo;ll need to come up with a remote exploit (or find the authentication code itself).</p>
+
+<p>The first check the application does is on a variable <code>secret_0</code> (I have renamed them myself for clarity) - if it&rsquo;s value is <code>0</code> (ASCII) then it proceeds with further checks, otherwise, it fails right there.</p>
+
+<p>But there&rsquo;s a problem&hellip; <code>secret_0</code> is actually initialised to <code>16</code> at the very beginning of that function and it&rsquo;s not being modified anywhere else along the way. How can it then ever equal <code>0</code>?!</p>
+
+<p>The same thing applies for <code>secret_1</code> and <code>secret_2</code> variables, which expect certain values (<code>t0k3</code> and <code>n4m3</code> respectively), but are initialised to <code>0</code> too.</p>
+
+<p>So how can we change the value of those variables, if we never get a chance to set them&hellip; or do we? ;)</p>
+
+<h2>Simple buffer overflow</h2>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/7.strcpy.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/7.strcpy.png" alt="image" /></a></p>
+
+<p>Luckily for us, the application uses insecure <code>strcpy()</code> to copy user provided input into an initialised array of a set length. As <code>strcpy</code> does not do bounds checking, it simply copies entire input until it hits a NULL byte (end of a string - <code>\x00</code>), not caring about sizes at all.</p>
+
+<p>As there are no input size checks performed by the application, we can use it try to overflow the buffer and set the relevant local variables to values we need.</p>
+
+<p>Let&rsquo;s have a look at how the application initialises the local variables and what offsets we need to work with.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/8.calculate_offset.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/8.calculate_offset.png" alt="image" /></a></p>
+
+<p>Let&rsquo;s analyse the above and picture how the stack will look like.</p>
+
+<p>As the execution is passed to this subroutine, what&rsquo;s going to happen here (after the <a href="https://en.wikipedia.org/wiki/Function_prologue">function prologue</a>) is that the local variables (<code>src</code>, <code>dest</code>, <code>secret_2</code>, <code>secret_1</code> and <code>secret_0</code>) are going to be pushed onto the stack.</p>
+
+<p>What order are they going to be pushed on? Look at the pointer arithmetic that IDA is showing us:</p>
+
+<ul>
+<li><code>secret_0</code> will end up in position of <code>base pointer (RBP)- 4 bytes</code></li>
+<li><code>secret_1</code> in <code>RBP-8 bytes</code></li>
+<li><code>secret_2</code> in <code>RBP-C</code> (in hex) and so on&hellip;</li>
+</ul>
+
+
+<p>This also gives us important information about the size of <code>dest</code> variable that we&rsquo;ll be overflowing - it&rsquo;s initiated size is, in hex, <code>20 - C</code> (difference between <code>secret_2</code> and <code>dest</code> offsets), which is <code>20 bytes</code>.</p>
+
+<p>If we were to draw it, after initialisation of all local variables the stack will look as follows:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>** Assuming each "frame" is 4 bytes.
+</span><span class='line'>
+</span><span class='line'>                                                       0x00000000 (lower memory addresses)
+</span><span class='line'>+----------+        RBP-28
+</span><span class='line'>|    SRC   |
+</span><span class='line'>|----------|
+</span><span class='line'>|          |
+</span><span class='line'>|----------|        RBP-20        ||
+</span><span class='line'>|   DEST   |                      ||  strcpy() writes
+</span><span class='line'>|----------|                      ||  this way
+</span><span class='line'>|          |                     \||/
+</span><span class='line'>|----------|                      \/
+</span><span class='line'>|          |
+</span><span class='line'>|----------|
+</span><span class='line'>|          |
+</span><span class='line'>|----------|
+</span><span class='line'>|          |
+</span><span class='line'>|----------|        RBP-C
+</span><span class='line'>| SECRET_2 |
+</span><span class='line'>|----------|        RBP-8
+</span><span class='line'>| SECRET_1 |
+</span><span class='line'>|----------|        RBP-4
+</span><span class='line'>| SECRET_0 |
+</span><span class='line'>+----------+    &lt;== RBP
+</span><span class='line'>                                                       0xFFFFFFFF (higher memory addresses)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now, having that information, we can easily deduct that in order to overflow our variables, we need to first fill up the buffer of <code>dest</code> with <code>20 bytes</code> of garbage, next <code>4 bytes</code> would be our <code>secret_2</code>, followed by <code>4 bytes</code> for <code>secret_1</code> and last <code>4 bytes</code> for <code>secret_0</code>.</p>
+
+<p>But what do we need to put in our secret variables? Pretty simple, let&rsquo;s just see what IDA shows us:</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/5.Decision_func.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/5.Decision_func.png" alt="image" /></a></p>
+
+<p>Easy! <code>secret_0</code> must be <code>0</code>, <code>secret_1</code> = <code>t0k3</code> and <code>secret_2</code> = <code>n4m3</code>.</p>
+
+<p><strong>HOWEVER!</strong> Because of <a href="https://en.wikipedia.org/wiki/Endianness#Little-endian">Little Endianness</a>, the strings will have to be written <strong>in reverse</strong>!</p>
+
+<p>So for <code>secret_1</code> and <code>secret_2</code> we&rsquo;ll need to write <code>3k0t</code> and <code>3m4n</code> respectively.</p>
+
+<h2>Exploit</h2>
+
+<p>Let&rsquo;s put our exploit to test! The payload we&rsquo;ll be sending is:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@debian:~# python -c 'print "A" * 20 + "n4m3" + "t0k3" + "0"'
+</span><span class='line'>AAAAAAAAAAAAAAAAAAAAn4m3t0k30</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And that&rsquo;s how it should look on the stack:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>** Assuming each "frame" is 4 bytes.
+</span><span class='line'>
+</span><span class='line'>BEFORE OVERFLOW                   AFTER OVERFLOW
+</span><span class='line'>===============                   ==============
+</span><span class='line'>                                                       0x00000000 (lower memory addresses)
+</span><span class='line'>
+</span><span class='line'> +----------+        RBP-28        +----------+
+</span><span class='line'> |    SRC   |                      |          |
+</span><span class='line'> |----------|                      |----------|
+</span><span class='line'> |          |                      |          |
+</span><span class='line'> |----------|        RBP-20        |----------|
+</span><span class='line'> |   DEST   |                      |   AAAA   |         ||
+</span><span class='line'> |----------|                      |----------|         ||  strcpy() writes
+</span><span class='line'> |          |                      |   AAAA   |         ||  this way
+</span><span class='line'> |----------|                      |----------|        \||/
+</span><span class='line'> |          |                      |   AAAA   |         \/
+</span><span class='line'> |----------|                      |----------|
+</span><span class='line'> |          |                      |   AAAA   |
+</span><span class='line'> |----------|                      |----------|
+</span><span class='line'> |          |                      |   AAAA   |
+</span><span class='line'> |----------|        RBP-C         |----------|            
+</span><span class='line'> | SECRET_2 |                      |   3m4n   |
+</span><span class='line'> |----------|        RBP-8         |----------|                        
+</span><span class='line'> | SECRET_1 |                      |   3k0t   |
+</span><span class='line'> |----------|        RBP-4         |----------|
+</span><span class='line'> | SECRET_0 |                      |  0 \x00  |
+</span><span class='line'> +----------+    &lt;== RBP           +----------+
+</span><span class='line'>
+</span><span class='line'>                                                       0xFFFFFFFF (higher memory addresses)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&rsquo;s give it a shot!</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/12.success.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/12.success.png" alt="image" /></a></p>
+
+<p>W00t W00t, access granted! :)</p>
+
+<h2>GDB Refresher</h2>
+
+<p>This part is basically something for me to have to refer to when I come across something similar in the future.</p>
+
+<p>As the challenge, in the end, turned out to be quite simple, I had to do some debugging in GDB to see if my offsets are right (and also because I have completely forgot about Little Endianness and my initial exploit didn&rsquo;t work!).</p>
+
+<p>Just to make sure that everything works as expected, load up the application in GDB <code>gdb ./FileVault</code> and set a breakpoint on one command that we&rsquo;re interested in <code>breakpoint strcpy</code>.</p>
+
+<p>Execute the application by invoking <code>run &lt; input</code>, where <code>input</code> is simply a text file with our paload generated in python (see above).</p>
+
+<p>The execution will stop on <code>strcpy()</code> function, step through it by pressing <code>n</code> or typing in <code>finish</code> to step out of <code>strcpy()</code> routine.</p>
+
+<p>As we hit first <code>cmp</code> instruction, see what sits under <code>rbp-0x4</code> by issuing <code>x/x $rbp-0x4</code> command.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/9.gdb_1.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/9.gdb_1.png" alt="image" /></a></p>
+
+<p>Since we&rsquo;re comparing a <code>DWORD</code>, we only need to worry about <code>4 bytes</code>, in our case it&rsquo;s <code>0x00000030</code> (from memory), which matches what is in the instruction call (<code>0x30</code>).</p>
+
+<p>Continue execution and investigate the following variables exactly same way.</p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/10.gdb_2.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/10.gdb_2.png" alt="image" /></a></p>
+
+<p><a href="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/11.gdb_3.png"><img src="/images/posts/2018-08-05-filevault-ctf-challenge-elf-x64-buffer-overflow/11.gdb_3.png" alt="image" /></a></p>
+
+<h2>Summary</h2>
+
+<p>All in all, it was pretty fun challenge that forced me to get back into exploit dev in Unix environments (I&rsquo;ve been mainly playing in Windows recently) and really stretched my memory on some basic concepts&hellip; which is great - gotta stay sharp! :)</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Knapsy</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2018-08-05T16:31:31+10:00'><span class='date'><span class='date-month'>Aug</span> <span class='date-day'>5</span><span class='date-suffix'>th</span>, <span class='date-year'>2018</span></span> <span class='time'>4:31 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/buffer-overflow/'>buffer overflow</a>, <a class='category' href='/blog/categories/ctf/'>ctf</a>, <a class='category' href='/blog/categories/exploit-development/'>exploit development</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://blog.knapsy.com/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/" data-via="TheKnapsy" data-counturl="http://blog.knapsy.com/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/05/01/quickzip-4-dot-60-win7-x64-seh-overflow-egghunter-with-custom-encoder/" title="Previous Post: QuickZip 4.60 - Win7 x64 SEH Overflow (Egghunter) with Custom Encoder">&laquo; QuickZip 4.60 - Win7 x64 SEH Overflow (Egghunter) with Custom Encoder</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>About Me</h1>
+  <p><img src="https://pbs.twimg.com/profile_images/1023056649072730112/mzJOzYd0_bigger.jpg" align="right"/><strong>Knapsy</strong> (<u><a href="http://twitter.com/TheKnapsy">@TheKnapsy</a></u>)<br/>
+  IT security guy, pentester, coder, basketballer, coffee enthusiast. Creative, bit nuts, sleep deprived.</p>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/">FileVault CTF Challenge - ELF X64 Buffer Overflow</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/01/quickzip-4-dot-60-win7-x64-seh-overflow-egghunter-with-custom-encoder/">QuickZip 4.60 - Win7 X64 SEH Overflow (Egghunter) With Custom Encoder</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/02/24/escape-from-shellcatraz-breaking-out-of-restricted-unix-shells-sectalks-melbourne-0x01-2016/">Escape From SHELLcatraz - Breaking Out of Restricted Unix Shells (SecTalks Melbourne 0x01 2016)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/25/easy-file-sharing-web-server-v7-dot-2-remote-seh-buffer-overflow-dep-bypass-with-rop/">Easy File Sharing Web Server v7.2 - Remote SEH Buffer Overflow (DEP Bypass With ROP)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/oscp-thoughts-and-tips/">OSCP - Thoughts and Tips</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>Latest Tweets</h1>
+  <p><a class="twitter-timeline" href="https://twitter.com/TheKnapsy" data-widget-id="517677537711767552">Tweets by @TheKnapsy</a></p>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2018 - Knapsy -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'knapsysbraindump';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://blog.knapsy.com/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/';
+        var disqus_url = 'http://blog.knapsy.com/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

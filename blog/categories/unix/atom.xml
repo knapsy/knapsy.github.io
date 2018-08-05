@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Unix | Knapsy's brain dump]]></title>
+  <link href="http://blog.knapsy.com/blog/categories/unix/atom.xml" rel="self"/>
+  <link href="http://blog.knapsy.com/"/>
+  <updated>2018-08-05T19:22:49+10:00</updated>
+  <id>http://blog.knapsy.com/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Escape From SHELLcatraz - Breaking Out of Restricted Unix Shells (SecTalks Melbourne 0x01 2016)]]></title>
+    <link href="http://blog.knapsy.com/blog/2016/02/24/escape-from-shellcatraz-breaking-out-of-restricted-unix-shells-sectalks-melbourne-0x01-2016/"/>
+    <updated>2016-02-24T20:56:28+11:00</updated>
+    <id>http://blog.knapsy.com/blog/2016/02/24/escape-from-shellcatraz-breaking-out-of-restricted-unix-shells-sectalks-melbourne-0x01-2016</id>
+    <content type="html"><![CDATA[<p>Today I had a pleasure of presenting at one of the first <a href="http://www.sectalks.org/melbourne/">SecTalks Melbourne</a> sessions - if you&rsquo;re from Melbourne, Australia area and into IT security / geeky stuff, make sure to sign up!</p>
+
+<p>The talked covered basic methodology as well as some tips and tricks on breaking out of restricted Unix shells (such as <code>rbash</code> and <code>rksh</code>) that I came across during several CTFs and also at the &ldquo;real life&rdquo; engagements.</p>
+
+<p>The slides from my talk are available at <a href="https://speakerdeck.com/knaps/escape-from-shellcatraz-breaking-out-of-restricted-unix-shells">SpeakerDeck here</a>.</p>
+
+<p>Enjoy! :)</p>
+]]></content>
+  </entry>
+  
+</feed>

