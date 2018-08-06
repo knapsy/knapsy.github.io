@@ -4,7 +4,7 @@
   <title><![CDATA[Knapsy's brain dump]]></title>
   <link href="http://blog.knapsy.com/atom.xml" rel="self"/>
   <link href="http://blog.knapsy.com/"/>
-  <updated>2018-08-05T19:22:49+10:00</updated>
+  <updated>2018-08-06T14:43:45+10:00</updated>
   <id>http://blog.knapsy.com/</id>
   <author>
     <name><![CDATA[Knapsy]]></name>
@@ -145,7 +145,7 @@
 <span class='line-number'>25</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>** Assuming each "frame" is 4 bytes.
 </span><span class='line'>
-</span><span class='line'>                                                       0x00000000 (lower memory addresses)
+</span><span class='line'>                                      0x00000000 (lower memory addresses)
 </span><span class='line'>+----------+        RBP-28
 </span><span class='line'>|    SRC   |
 </span><span class='line'>|----------|
@@ -167,7 +167,7 @@
 </span><span class='line'>|----------|        RBP-4
 </span><span class='line'>| SECRET_0 |
 </span><span class='line'>+----------+    &lt;== RBP
-</span><span class='line'>                                                       0xFFFFFFFF (higher memory addresses)</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>                                      0xFFFFFFFF (higher memory addresses)</span></code></pre></td></tr></table></div></figure>
 
 
 <p>Now, having that information, we can easily deduct that in order to overflow our variables, we need to first fill up the buffer of <code>dest</code> with <code>20 bytes</code> of garbage, next <code>4 bytes</code> would be our <code>secret_2</code>, followed by <code>4 bytes</code> for <code>secret_1</code> and last <code>4 bytes</code> for <code>secret_0</code>.</p>
@@ -188,8 +188,8 @@
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>root@debian:~# python -c 'print "A" * 20 + "n4m3" + "t0k3" + "0"'
-</span><span class='line'>AAAAAAAAAAAAAAAAAAAAn4m3t0k30</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>root@debian:~# python -c 'print "A" * 20 + "3m4n" + "3k0t" + "0"'
+</span><span class='line'>AAAAAAAAAAAAAAAAAAAA3m4n3k0t0</span></code></pre></td></tr></table></div></figure>
 
 
 <p>And that&rsquo;s how it should look on the stack:</p>
